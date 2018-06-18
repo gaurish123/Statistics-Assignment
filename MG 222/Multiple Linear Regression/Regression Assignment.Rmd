@@ -1,0 +1,529 @@
+---
+title: "Regression Assignment 1"
+author: "Karthick Raja, Rahul Sathyajit"
+date: "21 February 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+#install.packages("scatterplot3d")
+library(scatterplot3d)
+#install.packages("lmtest")
+library(lmtest)
+```
+
+```{r include=FALSE}
+normtest<-function(x)
+{
+  library(nortest)
+  s<-shapiro.test(x)
+  ad<-ad.test(x)
+  cvm<-cvm.test(x)
+  ll<-lillie.test(x)
+  sf<-sf.test(x)
+  df<-data.frame(Method=c(s$method, ad$method, cvm$method, ll$method, sf$method),
+                 P.Value=c(s$p.value, ad$p.value, cvm$p.value, ll$p.value, sf$p.value))
+  df
+}
+
+
+
+```
+
+>Problem Statement
+
+The clock prices data set contains the selling Price (in pounds Stirling) of 32 antique grandfather clocks in different auctions, along with the Age of the clocks in years and the number of Bidders participating in that auction.
+
+VARIABLES
+
+1. Age - Age of the clock (years)
+
+2. Bidders - Number of individuals participating in the bidding
+
+3. Price - Selling price (pounds Stirling)
+
+We're interested in modeling the Price (Dependent Variable) based on Age and Bidders. The Model can be Simple Linear Regression Model or a Multiple Linear Regression Model. Finally, we choose a Model that is best able to represent the given data.
+
+```{r Reading the Data}
+clock.data <- read.table("C:\\Users\\Lenovo\\Desktop\\clock_prices.data", header = TRUE)
+head(clock.data)
+summary(clock.data)
+str(clock.data)
+```
+<P style="page-break-before: always">
+
+>Data Analysis
+
+**1. Graphically analyze the data and comment on how the age of the clock and the number
+of bidders are affecting the auctioned selling price. **
+
+Plotting the given data yields :
+
+```{r Plot 1}
+plot(clock.data, pch=16)
+```
+
+A 3-D view of the Data would look like :
+```{r Plot 2}
+scatterplot3d(clock.data)
+```
+
+
+Looking at the 2D plots, we can answer the following :
+
+1. Price of the Clock seems to be linearly related to the Age of the Clock.
+
+2. The Price of the Clock seems to be linearly related to the Number of Bidders on the Clock.
+
+3. Age of the Clock and Number of Bidders don't seem to have a strong correlation between each other.
+
+
+Looking at the 3D plot allows us to infer the following :
+
+**Price of the Clock appears to have a linear relationship with Age of the Clocks and the Number of Bidders.**
+
+The immediate next step in our analysis would be to check the Correlation between the different Variables in the data.
+
+```{r Correlation}
+cor(clock.data)
+```
+
+The correlation Matrix simply confirms our inferences from the visual inspection of plots.
+
+<P style="page-break-before: always">
+
+
+>Fitting a First Order Model
+
+**2. Fit a first order multiple regression model to the data and answer the following based
+on this model : **
+
+Before we proceed with fitting a Full First Order Model, it is important to explore if a Full First Order Model itself is needed to explain the relationship between Price of the Clock and Age of  the Clock and/or Number of Bidders for the Clock.
+
+First we fit a Simple Linear Regression Model (SLRM) by considering only Price (Dependent Variable) and Age of the Clock (Regressor).
+
+```{r SLRM 1}
+slrm1 <- lm(Price ~ Age, data=clock.data)
+summary(slrm1)
+```
+We can see that 53.32% of the Total Variability in Price can be explained by Age of the Clock. (Based on R^2^ value we have obtained)
+
+Similarly, we can fit a SLRM by considering only Number of Bidders as Regressor Variable.
+
+```{r SLRM 2}
+slrm2 <- lm(Price ~ Bidders, data=clock.data)
+summary(slrm2)
+```
+As can be seen from the R^2^ values, Number of Bidders is able to explain only 15.57% of the variability in Price of the Clock.
+
+Next we can try fitting a Full First Order Multiple Regression Model as follows :
+
+```{r MLRM1}
+mlrm1 <- lm(Price ~ Age + Bidders, data=clock.data)
+summary(mlrm1)
+```
+
+As can be observed from the R^2^ value, the Model with both Age of the Clock and Number of Bidders is explaining 89.27% of the variability in Price.
+
+Here we can conclude that including both Bidders and Age in the Model has allowed us to explain more of the variability in Price as compared to SLRM for Bidders and Age individually.
+
+The next immediate questions that arise from fitting such a Model would be :
+
+1. What was left unexplained in Price after Age was included in the Model?
+
+2. How much of this unexplained variability can Bidders explain if it is also included in the Model?
+
+To answer both the above questions, we can take the help of Partial Regression Plots. (Added-Variable Plots)
+
+In the 2 predictor Model, we have Price, Age and Bidders for the Clock. The partial Regression plot for Bidders gives us information on including Bidders in the model, AFTER Age has already been included. It is created based on the Residuals from the following 2 Models :
+
+1. lm(Price ~ Age)
+
+2. lm(Bidders ~ Age)
+
+```{r Partial Regression Plots}
+
+slrm1 <- lm(Price ~ Age, data=clock.data)
+
+#Regression for Bidders on Age
+slrm3 <- lm(Bidders ~ Age, data=clock.data)
+
+#Plotting Residuals against each other
+plot(slrm3$residuals, slrm1$residuals, pch=16)
+
+```
+
+If a Linear Relationship is observed here, it is better to include the Bidders as the second predictor.
+
+```{r Added Variable explanation}
+mlrm.reg.part <- lm(slrm1$residuals ~ slrm3$residuals)
+summary(mlrm.reg.part)
+
+```
+
+The R^2^ value here indicates that **Adding Bidders to the Model (Price ~ Age) is able to explain 77.01% of the variability that was left unexplained by that model**
+
+The fitted line in the Partial Regression Plot also gives us the Regression Coefficient for Bidders in the MLRM.
+
+```{r Plotting line for Regression}
+plot(slrm3$residuals, slrm1$residuals, pch=16)
+abline(mlrm.reg.part)
+```
+
+Since we have fit a First Order Model, we can proceed with answering the rest of the questions.
+
+<P style="page-break-before: always">
+
+
+**a. Is the Model useful?**
+
+To answer this, we can check the F-values and the corresponding p-values obtained from our Model.
+
+```{r}
+summary(mlrm1)
+```
+
+**The low p-values observed for both $\beta$~0~ and $\beta$~1~ is quite low allowing us to conclude that both the values are significant.**
+
+We can also proceed with creation of ANOVA Table that allows us to infer if R^2^ obtained is significant or not.
+
+```{r ANOVA MLRM1}
+anova(mlrm1)
+```
+As can be seen, p-values for both Age and Bidders is nearly 0, allowing us to conclude that both $\beta$~0~ and $\beta$~1~ are both significant.
+
+Therefore, we can conclude that the following Model that has been fitted is useful :
+
+Price =  -1336.7221 + 12.7362(Age) + 85.8151(Bidders)
+
+
+<P style="page-break-before: always">
+
+
+**b. Given the age of a clock, by what amount can one expect the selling price to go up for one more person participating in the auction?**
+
+Using the fitted Model described above, we can say that - for a Clock with given age, an increase of 1 Bidder in the number of Bidders, is associated with an increase of 85.8151? in the Mean Price of the Clock.
+
+
+c. An auction house has acquired several grandfather clocks each 100 years old paying an average price of ?500 per clock. From the past experience it has found that such auctions (for antique grandfather clocks) typically attract about 10-12 bidders. What can be said about its expected profit per clock with 95% confidence?
+
+We need to find 95% Confidence Interval for the (Price - 500)? for a clock that is 100 years old and has 10 Bidders.
+
+Effectively we are finding E(Price|Age = 100, Bidders = 10), E(Price|Age = 100, Bidders = 11), and E(Price|Age = 100, Bidders = 12).
+
+```{r}
+#For Bidders = 10
+exp.value <- predict(mlrm1, newdata = data.frame(Age = 100, Bidders = 10),interval = "confidence", level = .95)
+exp.value[2]-500
+
+#For Bidders = 11
+exp.value <- predict(mlrm1, newdata = data.frame(Age = 100, Bidders = 11),interval = "confidence", level = .95)
+exp.value[2]-500
+
+#For Bidders = 12
+exp.value <- predict(mlrm1, newdata = data.frame(Age = 100, Bidders = 12),interval = "confidence", level = .95)
+exp.value[2]-500
+```
+
+The Expected Profit per Clock that is 100 years old and has 10 Bidders, with 95% confidence is 200.6368?
+
+
+The Expected Profit per Clock that is 100 years old and has 11 Bidders, with 95% confidence is 287.1706?
+
+
+The Expected Profit per Clock that is 100 years old and has 10 Bidders, with 95% confidence is 370.3602?
+
+
+<P style="page-break-before: always">
+
+
+
+**c. You walk into an auction selling an antique 150 year old grandfather clock and find that there are 15 bidders (including yourself) participating in the auction. You are extremely keen in acquiring the clock. At least what amount should you bid for the clock, so that, you are 99% certain that nobody else can out-bid you?**
+
+For this, we need to predict a lower bound for a Predicted value of Y ($\hat{Y}$) for the given values of Age = 150 years and Bidders = 15.
+
+```{r Prediction for Y }
+MSE <- mean(mlrm1$residuals^2)
+
+beta_matrix <- as.matrix(mlrm1$coefficients, ncol=1)
+
+
+new_data <- as.matrix(c(1, 150,15))
+
+prediction_price <- t(new_data) %*% beta_matrix
+t.value <- qt(0.99,30)
+x <- cbind(clock.data$Age,clock.data$Bidders)
+x_h <- matrix(c(150,15), nrow=1,ncol = 2)
+
+val <- x_h %*% solve( t(x) %*% x ) %*% t(x_h)
+lower.bound.price <- prediction_price-t.value*sqrt(MSE)*sqrt(1+val)
+lower.bound.price
+```
+
+**From the above calculations, we can say that if we bid at a Price higher than 1533.38?, we can be 99% certain that no one else can out-bid us.**
+
+
+<P style="page-break-before: always">
+
+
+**d. Find the partial correlation coefficients, compare them with the corresponding marginal correlation coefficients, and comment on the nature of the relationships between the independent variables and the dependent variable.**
+
+Marginal COrrelation Coefficients can be calculated as follows :
+
+1. R^2^~Price,Age~ is the R^2^ value obtained for model lm(Price ~ Age)
+
+2. R^2^~Price,Bidders~ is the R^2^ value obtained for model lm(Price ~ Bidders)
+
+```{r Partial Corr Coeff}
+marginal.corr.coeff.Age <- summary(slrm1)$r.squared
+marginal.corr.coeff.Bidders <- summary(slrm2)$r.squared
+marginal.corr.coeff.Age
+marginal.corr.coeff.Bidders
+```
+
+Marginal Correlation Coefficient for the Model Price ~ Age is : 0.5332405
+
+Marginal Correlation coefficient for the Model Price ~ Bidders is : 0.155741
+
+**We can infer that Age alone is able to explain 53.32% of the variability in Price and Bidders alone is able to explain 15.57% of the variability in Price.**
+
+
+For Partial Correlation coefficients, we can proceed to calculate 
+
+R^2^~Price , Age|Bidders~ and R^2^~Price , Bidders|Age~ as follows :
+
+
+```{r lm way}
+# Here - SSR(Age, Bidders) = SSR(Age) + SSR(Bidders|Age) - which is actually sequential sum of square output from anova.
+
+first.order.mlrm.full <- lm(Price ~  Age + Bidders, data = clock.data)
+
+# SSR(Age, Bidders)
+SSReg.Age.and.Bidders <- sum(anova(first.order.mlrm.full)[-3,2])
+SSReg.Age.and.Bidders
+# Total sum of square 
+SStotal.Age.and.Bidders <- sum(anova(first.order.mlrm.full)[,2])
+SStotal.Age.and.Bidders
+
+SSE.Age.and.Bidders <- SStotal.Age.and.Bidders - SSReg.Age.and.Bidders
+
+##Calculation of SSR(Bidders|Age)
+slrm1 <- lm(Price ~ Age, data=clock.data)
+summary(anova(slrm1))
+SSReg.Age <- sum(anova(slrm1)[-2,2])
+#SSReg.Age
+
+SStotal.Age <- sum(anova(slrm1)[,2])
+#SStotal.Age
+
+SSE.Age <- SStotal.Age - SSReg.Age
+
+#Calculate SSR(Bidders|Age) <- SSE(Age) - SSE(Age,Bidders)
+SSReg.Bidders.given.Age <- SSE.Age - SSE.Age.and.Bidders
+#SSReg.Bidders.given.Age
+
+#Calculation of SSR(Age|Bidders)
+slrm2 <- lm(Price ~ Bidders, data=clock.data)
+SSReg.Bidders <- sum(anova(slrm2)[-2,2])
+#SSReg.Bidders
+
+SSTotal.Bidders <- sum(anova(slrm2)[,2])
+#SSTotal.Bidders
+
+SSE.Bidders <- SSTotal.Bidders - SSReg.Bidders
+
+#Calculate SSR(Age|Bidders) <- SSE(Bidders) - SSE(Age,Bidders)
+SSReg.Age.given.Bidders <- SSE.Bidders - SSE.Age.and.Bidders
+#SSReg.Age.given.Bidders
+
+
+R.squared.Age.given.Bidders <- SSReg.Age.given.Bidders/SSE.Bidders
+
+R.squared.Bidders.given.Age <- SSReg.Bidders.given.Age/SSE.Age
+
+cat("R2 value for Price,Age|Bidders : ",R.squared.Age.given.Bidders,"\nR2 value for Price,Bidders|Age : ",R.squared.Bidders.given.Age)
+```
+
+We can interpret the above results as follows :
+
+1. Age is able to explain 87.29% of the variation remaining in Price after including Bidders.
+
+2. Bidders is able to explain 77.01% of the variation remaining in Price after including Age.
+
+
+Observing the Marginal and Partial Coefficients of determination, we can conclude that :
+
+1. Age alone is able to explain more variability in Price compared to Bidders alone.
+
+2. Inclusion of Age in the model for Price (on top of Bidders) is able to explain more of the remaining variability in Price, as compared to inclusion of Bidders in the model for Price (on top of Age).
+
+
+<P style="page-break-before: always">
+
+
+**f. In presence of the other, which of the two factors, age of the clock or the number of bidders, is more important in determining the selling price of a clock?**
+
+To answer this, we first build a standardized First Order Linear Model as follows :
+
+```{r Standardized Model}
+std.clock <- clock.data
+
+std.clock$Price <- (clock.data$Price - mean(clock.data$Price))/sd(clock.data$Price)
+std.clock$Age <- (clock.data$Age - mean(clock.data$Age))/sd(clock.data$Age)
+std.clock$Bidders <- (clock.data$Bidders - mean(clock.data$Bidders))/sd(clock.data$Bidders)
+
+standard.model <- lm(Price ~ -1 + Age + Bidders,data = std.clock)
+
+summary(standard.model)
+
+vcov(standard.model)
+
+val <- (0.88752-0.61985)/sqrt(2*(0.0038223614-0.0009699208))
+p.val <- 2*(1-pt(val,30))
+cat("p-value for Statistical significance between Coefficients of Age and Bidders",p.val)
+```
+
+As can be observed from the calculations above, coefficient of standardized Age of the Clock is higher than the coefficient of standardized Number of Bidders for the Clock. The difference between the two values is also significant as indicated by a p-value of 0.001314. (Considering $\alpha$ = 5%)
+
+**We can conclude that Age of the Clcok is more important in determining the selling price of the Clock compared to Number of Bidders.**
+
+
+<P style="page-break-before: always">
+
+
+**3. Is the first order model acceptable? Fit as appropriate a Model as possible for the auctioned selling price of grandfather clocks, based on the information on the age of the clock and the number of bidders, and then based on this model answer the same questions as in 2. b, c, and d above.**
+
+To answer whether a Model is acceptable or not, we proceed with plotting the residuals obtained after fitting the model.
+
+For the 1st Order Model we fitted earlier :
+
+```{r Residual Analysis}
+#res_analysis(mlrm1, clock.data)
+  
+sres<-residuals(mlrm1)/(133.1*sqrt(1-influence(mlrm1)$hat))
+hist(sres)
+boxplot(sres,main="Sres")
+plot(mlrm1)
+plot(clock.data$Age,sres)
+plot(clock.data$Bidders,sres)
+normtest(sres)
+bptest(mlrm1)
+```
+
+As can be seen from the Residual plots, there are  no visible patterns in the Residuals obtained from the fitted model.
+
+It can also be seen from the Normality Tests and the Breusch-Pagan Tests that the Residuals follow a Normal Distribution and are homoscedastic in nature.
+
+**Based on the above, we can conclude that the First Order Model we have fitted is Acceptable.**
+
+
+> Higher Order Model
+
+We belive that a second order Model might be able to explain the variance in Prices better than the First Order Model already fitted. We can check this by fitting a Second Order Model as follows :
+
+```{r Second Order Model}
+second.mlrm <- lm(Price ~ Age + Bidders + I(Age*Bidders), data = clock.data)
+summary(second.mlrm)
+```
+
+As can be seen from the R^2^ value obtained, this Model is able to explain 95.44% of the variance in Price.
+
+<P style="page-break-before: always">
+
+
+**a. Is the Model useful?**
+
+
+To check if the Model is useful, we can observe the F-value and p-value for each of the Variables from the ANOVA table below.
+
+```{r ANOVA second order mlrm}
+anova(second.mlrm)
+```
+
+As can be seen, the p values are quite low - indicating that Age, Bidders and interaction between Age and Bidders is significant.
+
+Since this establishes the usefulness of the Model, we can proceed with answering the questions.
+
+<P style="page-break-before: always">
+
+
+**b. Given the age of a clock, by what amount can one expect the selling price to go up for one more person participating in the auction?**
+
+We can write the fitted Model as : 
+
+E(Price) = 322.7544 + 0.8733(Age) - 93.4099(Bidders) + 1.2979(Age * Bidders)
+
+This can be re-written as :
+
+ E(Price) = 322.7544 + 0.8733(Age) + (-93.4099 + 1.2979 x Age) x Bidders
+ 
+ For a given Age, the Expected selling Price of a Clock will go up by (-93.4099 + 1.2979 x Age) where Age will be a constant given to us.
+ 
+ 
+<P style="page-break-before: always">
+ 
+
+**c. An auction house has acquired several grandfather clocks each 100 years old paying an average price of ?500 per clock. From the past experience it has found that such auctions (for antique grandfather clocks) typically attract about 10-12 bidders. What can be said about its expected profit per clock with 95% confidence?**
+
+We need to find 95% Confidence Interval for the (Price - 500)? for a clock that is 100 years old and has 10 to 12 Bidders.
+
+Effectively we are finding E(Price|Age = 100, Bidders = 10), E(Price|Age = 100, Bidders = 11), and E(Price|Age = 100, Bidders = 12).
+
+```{r}
+#For Bidders = 10
+exp.value1 <- predict(second.mlrm, newdata = data.frame(Age = 100, Bidders = 10),interval = "confidence", level = .95)
+exp.value1[2] - 500
+
+#For Bidders = 11
+exp.value2 <- predict(second.mlrm, newdata = data.frame(Age = 100, Bidders = 11),interval = "confidence", level = .95)
+exp.value2[2]-500
+
+#For Bidders = 12
+exp.value3 <- predict(second.mlrm, newdata = data.frame(Age = 100, Bidders = 12),interval = "confidence", level = .95)
+exp.value3[2]-500
+```
+
+The Expected Profit per Clock that is 100 years old and has 10 Bidders, with 95% confidence is 210.7254?
+
+
+The Expected Profit per Clock that is 100 years old and has 11 Bidders, with 95% confidence is 243.6869?
+
+
+The Expected Profit per Clock that is 100 years old and has 12 Bidders, with 95% confidence is 271.1562?
+
+
+<P style="page-break-before: always">
+
+
+**d. You walk into an auction selling an antique 150 year old grandfather clock and find that there are 15 bidders (including yourself) participating in the auction. You are extremely keen in acquiring the clock. At least what amount should you bid for the clock, so that, you are 99% certain that nobody else can out-bid you?**
+
+
+
+For this, we need to predict a lower bound for a Predicted value of Y ($\hat{Y}$) for the given values of Age = 150 years and Bidders = 15.
+
+```{r Prediction for Y - second order }
+MSE <- mean(second.mlrm$residuals^2)
+
+beta_matrix <- as.matrix(second.mlrm$coefficients, ncol=1)
+beta_matrix
+
+new_data <- as.matrix(c(1, 150,15, 2250))
+new_data
+prediction_price <- t(new_data) %*% beta_matrix
+t.value <- qt(0.99,30) #df = 30
+x <- cbind(clock.data$Age,clock.data$Bidders, clock.data$Age*clock.data$Bidders)
+x_h <- matrix(c(150,15,2250), nrow=1,ncol = 3)
+
+val <- x_h %*% solve( t(x) %*% x ) %*% t(x_h)
+lower.bound.price <- prediction_price-t.value*sqrt(MSE)*sqrt(1+val)
+lower.bound.price
+```
+
+From the above calculations, we can say that if we bid at a Price higher than 1750.339?, we can be 99% certain that no one else can out-bid us.
+
+<P style="page-break-before: always">
+
