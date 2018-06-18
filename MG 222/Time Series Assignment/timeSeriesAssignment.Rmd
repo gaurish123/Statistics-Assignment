@@ -1,0 +1,346 @@
+---
+title: "Time Series Assignment"
+author: "Karthick,Rahul"
+date: "17 April 2018"
+output: html_document
+---
+
+```{r loadingData}
+df <- read.csv("C:\\Users\\Lenovo\\Desktop\\ML\\Time Series\\exchange_rate.data")
+
+df$Date <- as.Date(df$Date, format = "%B %d,%Y")
+
+df <- df[order(df$Date),]
+
+price <- as.ts(df$Price)
+
+lPrice <- log(price)
+```
+
+####Visualisation of the Time Series data
+
+```{r }
+plot(price)
+plot(lPrice)
+```
+We wont be able to decide any model just by using the Time Series plot. but we may see the need for various actions.
+
+There is an obvious linear upward trend in the price movement.
+We may need a first difference to make it into a stationary series.
+( A quadratic trend might need a 2nd order difference )
+
+In general, all the price objects fit in perfectly for a log transformation.
+for ARIMA models its better to use log transformation because, the model doesn't have to deal with multiplicative nature of the seasonality or trend. The variation will also be consistent for log models.
+
+Note: Log transformation are bad for values closer to zero.
+
+```{r sqrtTransformation}
+plot(sqrt(price))
+```
+
+Here the plot shows the sqrt transformation of the time series data, which is also similar to that of the log transformation. we will continue to use the log transforamtion for the mentioned advantages.
+
+```{r acfAndPacf}
+acf(lPrice)
+pacf(lPrice,ylim = c(-0.1,0.2))
+```
+The ACF and PACF should be considered together.  It can sometimes be tricky going, but a few combined patterns do stand out.
+
+####Some general notes on the ACF and PACF plot 
+
+MA models have theoretical ACFs with non-zero values at the MA terms in the model and zero values elsewhere.
+
+ARMA models (including both AR and MA terms) have ACFs and PACFs that both tail off to 0. The most Trickiest Plot. Basically you just have to guess that one or two terms of each type may be needed and then see what happens when you estimate the model.
+
+If all autocorrelations are non-significant, then the series is random (white noise; the ordering matters, but the data are independent and identically distributed.), which is our desire.
+
+If you have taken first differences and all autocorrelations are non-significant, then the series is called a random walk and we are done.
+
+***If the ACF and PACF do not tail off, but instead have values that stay close to 1 over many lags, the series is non-stationary and differencing will be needed.  Try a first difference and then look at the ACF and PACF of the differenced data.***
+
+
+Clear Indication of the ARIMA model.
+
+####Description of the Weekly Price Series:
+
+1. Clear Indication of the upward trend ( Log - Price)
+
+2. From the PACF plot, we can guess that one difference is requirred and then we have to look at the ACF and PACF of the differenced series.
+
+below are the test for checking for unit roots by fitting an AR model over the data.
+
+
+```{r testOnLogSeries, warning=FALSE}
+library(tseries)
+batteryTest <- function(x){
+  p.value.adf <- adf.test(x)$p.value
+  p.value.pp <- pp.test(x)$p.value
+  p.value.kpss <- kpss.test(x)$p.value
+  cat("The Results of the test for Unit Root")
+  cat("ADF Test ", "P.Value", " ",p.value.adf,"\n", sep="")
+  cat("PP Test ", "P.Value", " ",p.value.pp,"\n", sep="")
+  cat("KPSS Test ", "P.Value"," ", p.value.kpss,"\n", sep="")
+  }
+
+batteryTest(lPrice)
+```
+
+The above battery of test are conducted to check for unit roots. 
+
+Hypothesis for ADF test and PP test
+
+H0: psi* = 0 , Not a Stationary Process
+H1: psi* < 0 , Stationary Process
+
+Hypothesis for KPSS test
+
+The hypothesis tests for trend stationary.
+
+To estimate sigma^2 the Newey-West estimator is used.
+
+H0: sigma2 = 0, Stationary process
+H1: sigma2 != 0, Not a stationary process
+
+The tests clearly shows that data is not stationary.
+
+```{r, warning=FALSE}
+dlPrice <- diff(lPrice)
+batteryTest(dlPrice)
+```
+
+After taking the difference of the Price Series we can arrive at a series which is stationary according to the ADF, PP, KPSS tests.
+
+Lets try to look at the ACF and PACF plots of the series.
+
+```{r acfAndPacfDiff}
+acf(dlPrice)
+pacf(dlPrice)
+```
+
+We can observe from the plot that the first 2 lags of the ACF are significant, after which that values tapper to zero and insignificant.
+
+similarly we can observe the PACF lags becomes significant at equal intervals.
+
+MA model with 2 lags and AR with 2 lags.
+
+```{r boxTest}
+Box.test(dlPrice,lag=30)
+Box.test(dlPrice,lag=30,type="L")
+```
+
+Not a white noise, since auto correlation exist.
+
+add hypothesis
+
+```{r }
+arma_aics<-function(x,P,d,Q)
+{
+ aics<-matrix(nrow=P+1,ncol=Q+1)
+ for(p in 0:P)
+ for(q in 0:Q)
+ {
+ mdl<-arima(x,order=c(p,d,q),method = "ML")
+if( mdl$code==0 ) aics[p+1,q+1]<-mdl$aic
+ }
+ return(aics)
+}
+
+aic10 <- arma_aics(lPrice,10,1,10)
+```
+
+```{r View}
+#View(aic3)
+sort(aic3)[1:6]
+```
+
+```{r }
+model52 <- arima(lPrice,order=c(5,1,2),method = "ML")
+
+model25<- arima(lPrice,order=c(2,1,5),method = "ML")
+
+model33 <- arima(lPrice,order=c(3,1,3),method = "ML")
+
+model02 <- arima(lPrice,order=c(0,1,2),method = "ML")
+
+model35 <- arima(lPrice,order=c(3,1,5),method = "ML")
+
+model53 <- arima(lPrice,order=c(5,1,3),method = "ML")
+
+model20 <- arima(lPrice,order=c(2,1,0),method = "ML")
+
+model34 <- arima(lPrice,order=c(3,1,4),method = "ML")
+
+model03 <- arima(lPrice,order=c(0,1,3),method = "ML")
+
+model12 <- arima(lPrice,order=c(1,1,2),method = "ML")
+
+```
+
+```{r }
+model52
+```
+```{r }
+arima(lPrice,order=c(5,1,2),method = "ML",fixed=c(0,NA,0,NA,0,NA,NA))
+```
+```{r }
+model33
+```
+```{r }
+model33
+```
+```{r }
+model33$aic
+model20$aic
+model02$aic
+```
+```{r }
+chosenModel <- arima(x = lPrice, order = c(3, 1, 3), method = "ML")
+res <- residuals(chosenModel)
+plot(res)
+qqnorm(res)
+```
+```{r }
+normtest(res)
+
+```
+```{r }
+acf(res)
+pacf(res)
+
+```
+```{r }
+tsdiag(chosenModel)
+
+```
+
+```{r }
+Box.test(res,lag=20)
+Box.test(res,lag=20,type = "L")
+```
+```{r }
+acf(res^2)
+pacf(res^2)
+
+```
+```{r }
+Box.test(res^2,lag=20)
+Box.test(res^2,type="L",lag=20)
+```
+```{r }
+irfplot<-function (irf, s)
+{
+ n <- length(irf)
+ plot(c(0,n+1), range(c(irf,1)), type = "n",xlab = "Time", ylab = "IRF", main = s)
+ lines(c(0,n+1),c(0,0))
+ lines(c(0,0),c(0,1))
+ for (i in 1:n)
+ lines(c(i,i), c(0, irf[i]))
+}
+```
+
+```{r }
+chosenModel
+```
+
+```{r }
+psi<-ARMAtoMA(ar=c(0.563,-0.8193,0.5861), ma=c(-0.4649,0.8527,-0.5535),lag.max=30)
+psi
+```
+```{r }
+irfplot(psi,"Exchange Rate IRF")
+irfplot(cumsum(psi)+1,"Log-Exchange Rate IRF")
+```
+```{r }
+psi100<-ARMAtoMA(ar=c(0.563,-0.8193,0.5861), ma=c(-0.4649,0.8527,-0.5535),lag.max=100)
+
+```
+
+```{r }
+gamma0 <- (1+sum(psi100^2))*7.549e-05
+gamma0
+```
+
+```{r }
+pc2<-ARMAacf(ar=c(0.563,-0.8193,0.5861), ma=c(-0.4649,0.8527,-0.5535),lag.max=30,pacf=T)^2
+v<-gamma0
+for(i in 2:31) v[i]<-v[i-1]*(1-pc2[i-1])
+```
+
+```{r }
+((1-v/gamma0)*100)[-1]
+```
+```{r }
+pc2*100
+```
+```{r }
+cumsum(pc2*100)
+```
+
+```{r }
+((gamma0-7.549e-05)/gamma0)*100
+
+```
+```{r }
+pr<-predict(chosenModel,n.ahead=4)
+pr
+```
+```{r }
+exp(pr$pred)
+
+```
+```{r }
+exp(pr$pred-2*pr$se)
+
+```
+
+```{r }
+exp(pr$pred+2*pr$se)
+
+```
+
+Real Details:
+
+ 63.61, 63.83, 63.59 and 64.13
+ 
+```{r }
+timeSeriesProcess<- function(x,y,z){
+  chosenModel <- arima(lPrice, order = c(x,y,z),method = "L")
+  res<-residuals(chosen_model)
+  plot(res)
+  qqnorm(res)
+  acf(res)
+  pacf(res)
+  tsdiag(chosen_model)
+  normtest(res)
+  Box.test(res,lag=20)
+  Box.test(res,type="L",lag=20)
+  acf(res^2)
+  pacf(res^2)
+  Box.test(res^2,lag=20)
+  Box.test(res^2,type="L",lag=20)
+  arp <- as.numeric(arima(x = lPrice, order = c(x,y,z), method = "ML")$coef[1:x])
+  mrp <- as.numeric(arima(x = lPrice, order = c(x,y,z), method = "ML")$coef[x+1:x+z])
+  psi<-ARMAtoMA(ar=c(arp), ma=c(mrp),  lag.max=30)
+  irfplot(psi,"Return IRF")
+  irfplot(cumsum(psi)+1,"Log-Sensex IRF")
+  psi100<-ARMAtoMA(ar=c(arp), ma=c(mrp),  lag.max=100)
+  gamma0<-(1+sum(psi100^2))*chosenModel$sigma2
+  pc2<-ARMAacf(ar=c(arp), ma=c(mrp),lag.max=30,pacf=T)^2
+  v<-gamma0
+  for(i in 2:31) v[i]<-v[i-1]*(1-pc2[i-1])
+  ((1-v/gamma0)*100)[-1]
+  pc2*100
+  cumsum(pc2*100)
+  pr<-predict(chosen_model,n.ahead=4)
+  exp(pr$pred-2*pr$se)
+  exp(pr$pred+2*pr$se)
+  
+}
+
+```
+
+```{r }
+timeSeriesProcess(0,1,2)
+
+```
+

@@ -1,0 +1,513 @@
+---
+title: "Advanced Analytics Assignment 1"
+author: "Karthick Raja, Rahul Sathyajit, Nikhil Shende, Akshar Vashist"
+output: html_document
+---
+<P style="page-break-before: always">
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+> Introduction to the Problem
+
+A company that manufactures large industrial fans recently acquired a smaller competitor manufacturing fans with stronger blades. The companies used different manufacturing methods to attach the fan blades (spyders) to the fan hubs, which give the assembly its strength. In an attempt to determine the best manufacturing process, an experiment was designed to investigate the better levels of:
+
+1. Two types of hole in the spyder
+
+2. Two assembly methods, and
+
+3. Two hub (or barrel) shapes.
+
+The full factorial design resulted in eight treatments. 
+
+Destructive testing was used to break the spyder from the hub and the Torque required to break the part was measured in footpounds. The levels of the three factors are denoted by plus(+) or minus(-) one. 
+Here, we analyse the data to determine the optimal levels of the 3 factors resulting in the strongest spyders.
+
+
+NOTE : The strongest Spyders are the ones which require the highest Torque that needs to be applied to break it. Essentially, we are seeking a combination of the 3 factors (Hub, Assembly, Hole) that will provide us with an indication of the highest Torque values.
+
+> Possible Questions to Answer
+
+1. Does the Fan's Torque differ between the two differnt types of Holes?
+2. Does the Fan's Torque differ between the two Assembly methods?
+3. Does the Fan's Torque differ between the two Hub shapes?
+4. Is there any interaction between the above metioned variables?
+
+<P style="page-break-before: always">
+
+```{r include=FALSE}
+library(plyr)
+library(gplots)
+```
+
+```{r include=FALSE}
+normtest<-function(x)
+{
+  library(nortest)
+  s<-shapiro.test(x)
+  ad<-ad.test(x)
+  cvm<-cvm.test(x)
+  ll<-lillie.test(x)
+  sf<-sf.test(x)
+  df<-data.frame(Method=c(s$method, ad$method, cvm$method, ll$method, sf$method),
+                 P.Value=c(s$p.value, ad$p.value, cvm$p.value, ll$p.value, sf$p.value))
+  df
+}
+```
+
+>Data Analysis
+
+
+```{r Reading data}
+setwd("C:\\Users\\SONY VAIO\\Desktop\\sem2")
+inp.data <- read.table("spyder_strength.data", header = TRUE)
+inp.data$Hole <- as.factor(inp.data$Hole)
+inp.data$Assembly <- as.factor(inp.data$Assembly)
+inp.data$Hub <- as.factor(inp.data$Hub)
+
+```
+
+
+```{r Cleaning and setting up of Data}
+##Convert factors to readable formats
+levels(inp.data$Hole)[levels(inp.data$Hole)=="-1"] <- "Hole1"
+levels(inp.data$Hole)[levels(inp.data$Hole)=="1"] <- "Hole2"
+levels(inp.data$Assembly)[levels(inp.data$Assembly)=="-1"] <- "Assembly1"
+levels(inp.data$Assembly)[levels(inp.data$Assembly)=="1"] <- "Assembly2"
+levels(inp.data$Hub)[levels(inp.data$Hub)=="-1"] <- "Hub1"
+levels(inp.data$Hub)[levels(inp.data$Hub)=="1"] <- "Hub2"
+
+##Creating Treatment Column (For comparison purposes)
+
+for(i in 1:64){
+  if (inp.data$Hole[i] == "Hole1" & inp.data$Assembly[i] == "Assembly1" & inp.data$Hub[i]=="Hub1")  inp.data$treatment[i] <- "H1A1H1" 
+  if (inp.data$Hole[i] == "Hole1" & inp.data$Assembly[i] == "Assembly1" & inp.data$Hub[i]=="Hub2")  inp.data$treatment[i] <- "H1A1H2" 
+  if (inp.data$Hole[i] == "Hole1" & inp.data$Assembly[i] == "Assembly2" & inp.data$Hub[i]=="Hub1")  inp.data$treatment[i] <- "H1A2H1" 
+  if (inp.data$Hole[i] == "Hole1" & inp.data$Assembly[i] == "Assembly2" & inp.data$Hub[i]=="Hub2")  inp.data$treatment[i] <- "H1A2H2" 
+  if (inp.data$Hole[i] == "Hole2" & inp.data$Assembly[i] == "Assembly1" & inp.data$Hub[i]=="Hub1")  inp.data$treatment[i] <- "H2A1H1" 
+  if (inp.data$Hole[i] == "Hole2" & inp.data$Assembly[i] == "Assembly1" & inp.data$Hub[i]=="Hub2")  inp.data$treatment[i] <- "H2A1H2" 
+  if (inp.data$Hole[i] == "Hole2" & inp.data$Assembly[i] == "Assembly2" & inp.data$Hub[i]=="Hub1")  inp.data$treatment[i] <- "H2A2H1" 
+  if (inp.data$Hole[i] == "Hole2" & inp.data$Assembly[i] == "Assembly2" & inp.data$Hub[i]=="Hub2")  inp.data$treatment[i] <- "H2A2H2" 
+}
+
+inp.data$treatment <- as.factor(inp.data$treatment)
+##Adding SID to the columns
+inp.data$SID <- 1:64
+head(inp.data)
+
+```
+
+
+
+First we plot the Torque values for each of the 8 Treatment groups and visually inspect if there are any differences in the Mean Torque Values across the different groups.
+
+```{r fig.height=8, fig.width=8}
+bymedian <- with(inp.data, reorder(inp.data$treatment, inp.data$Torque, median))
+boxplot(Torque~bymedian, data = inp.data, main = "Torque values for different Treatment Group", xlab = "Treatment Group", ylab ="Torque", cex.axis = 0.75)
+```
+
+
+As can be seen from the boxplot above for Torque values for different Treatment groups, there seems to be a significant effect of various combinations of Hole, Assembly, and Hub factor levels on Torque. 
+
+
+We would next graphically explore how the mean Torque value changes given specific levels of each of the given Factors (Hub, Assembly, Hole) considered individually.
+
+```{r fig.width=5, fig.height=5}
+plot.design(Torque ~ Hole*Assembly*Hub,data=inp.data,xlab="Factors",main = "Main Effects Model")
+
+```
+
+
+As can be seen from the plot, the mean value of Torque seems to change the most based on the level of Hub (Hub1 or Hub2) that is chosen.
+
+We now proceed to see whether different combinations of levels of factors differently affect the Mean Torque value.
+
+We can test for the statistical significance of "Treatment group affects Torque" by proceeding with a One-Way ANOVA Model for Treatment and Torque.
+
+
+H<sub>0</sub> : There is no different in Mean values of Torque across the different Treatment Groups.
+
+$\mu$<sub> 1 </sub> = $\mu$<sub> 2 </sub> = $\mu$<sub> 3 </sub> = $\mu$<sub> 4 </sub> = $\mu$<sub> 5 </sub> = $\mu$<sub> 6 </sub> = $\mu$<sub> 7 </sub> = $\mu$<sub> 8 </sub>
+
+H<sub>1</sub>: There is a significant difference in Mean values of Torque across different Treatment Groups.
+
+$\mu$<sub>l</sub> $\ne$ $\mu$<sub>m</sub> for l $\ne$ m. l = 1..8, m = 1..8
+
+
+```{r ANOVA Fitted for Treatment Groups}
+anovaModel1 <- anova(aov(Torque~treatment + SID, data= inp.data))
+anovaModel1
+```
+The high F-value obtained above allows us to reject the Null Hypothesis that Mean values for Torques are equal across Treatment groups.
+
+
+Now that we have confirmed that Mean values of Torque are different across different Treatment Groups, we can proceed with building an ANOVA model that helps us see the Main Effects and the Interaction Effects between Assembly Method, Hub Shape and Hole Type in the given data.
+
+
+>Inclusion of Blocking Factor
+
+We have included a Blocking Factor (SID) in the ANOVA model along with Assembly, Hub and Hole Factors.
+In our experiment, there could be Nuisance factor (like experiment iteration), which might have some effect on Torque value. This factor is of no interest to us, but the variability imparted by the factor should be explained or minimized while using ANOVA.
+
+
+<P style="page-break-before: always">
+
+>ANOVA Model
+
+The ANOVA Model, after accounting for Blocks, effectively looks like :
+
+SS~T~ = SS~Treatments~ + SS~Blocks~ + SS~E~
+
+We are interested only in the treatment factors and not on the blocking factor.
+
+
+**Assumptions for ANOVA Model**
+
+1. The dependent variable should be measured at the continuous level (i.e., it is an interval or ratio variable).
+
+2. The three independent variables should each consist of two or more categorical, independent groups.
+
+3. You should have independence of observations, which means that there is no relationship between the observations in each group or between the groups themselves.
+
+4. There should be no significant outliers.
+
+5. Your dependent variable should be approximately normally distributed for each combination of the groups of the three independent variables.
+
+6. There needs to be homogeneity of variances for each combination of the groups of the three independent variables.
+
+
+Assumptions 1, 2 and 3 are usually satisfied by the Design of the Experiment itself.
+
+Assumption 4 can be tested as follows:
+
+```{r fig.height=3, fig.width =3 }
+boxplot(inp.data$Torque, ylab = "Torque", main = "Boxplot of Torque values")
+```
+
+The boxplot indicates that there are No visible Outliers in the given data.
+
+
+
+#####Normality Testing for each Treatment Group
+```{r echo=FALSE}
+cat("P-Values for Shapiro Wilk Test for Normality for different Treatment Groups","\n","---------------------------------------------------------------------------")
+
+for(i in levels(inp.data$treatment)){
+  t <- as.numeric(unlist(subset(inp.data, inp.data$treatment == i, select = c(Torque))))
+  testRes <- shapiro.test(t)
+  cat("Treatment Group ",i," : ",testRes$p.value, "\n")
+}
+
+```
+
+Analysis of the obtained p-values shows that barring 3 samples, the rest of the samples hold up to Assumption 5.
+
+#####Bartlett Test for Variance across Treatment Groups
+
+H~0~ : Variances are equal across Treatment Groups.
+
+H~1~ : Variances are not equal across Treatment Groups.
+
+
+```{r Homoscedasticity across Torque Values for different Treatment Groups}
+##Bartlett Test
+bartlett.test(Torque ~ treatment, data=inp.data)
+```
+
+The p-value obtained above indicates that we cannot reject the Null Hypothesis that Variance is the same for all the Treatment Groups. Therefore Assumption 6 also holds.
+
+
+Since we have completed checking the Assumptions we have made regarding the given data, we can proceed with ANOVA Model building.
+
+<P style="page-break-before: always">
+
+
+>ANOVA Model - Three Way Analysis of Variance
+
+
+```{r ANOVA Full Model}
+anovaModel3 <- anova(aov(Torque ~ Hole*Hub*Assembly + SID, data = inp.data))
+anovaModel3
+```
+
+
+The F-values and the corresponding p-values for each of the above term indicates the following :
+
+1. There are significant Main Effects of the 3 Factors (Hub, Assembly, Hole) on mean Torque values.
+
+2. There are significant 2-way Interactions between any 2 of the given Factors.
+
+3. There is a significant 3-way Interaction Effect in the Model between Hub, Assembly, and Hole.
+
+
+The 3-way Interaction Effect can be visualized as follows:
+
+```{r echo=FALSE, fig.height=6, fig.width =6}
+Hole_lvl <- NULL
+
+for(i in 1:64)
+ {
+ if(inp.data$Hub[i]=="Hub1" & inp.data$Assembly[i]=="Assembly1") Hole_lvl[i]<-"H1A1"
+ if(inp.data$Hub[i]=="Hub1" & inp.data$Assembly[i]=="Assembly2") Hole_lvl[i]<-"H1A2"
+ if(inp.data$Hub[i]=="Hub2" & inp.data$Assembly[i]=="Assembly1") Hole_lvl[i]<-"H2A1"
+ if(inp.data$Hub[i]=="Hub2" & inp.data$Assembly[i]=="Assembly2") Hole_lvl[i]<-"H2A2"
+}
+Hole_lvl<-as.factor(Hole_lvl)
+
+interaction.plot(inp.data$Hole,Hole_lvl,inp.data$Torque,main="3 Way Interaction", xlab = "Hole Type", ylab = "Mean Torque", legend =TRUE, trace.label = "Hub+Assembly")
+
+```
+
+
+**NOTE : The 3 way Interaction plot is built for Hole Type and Mean Torque values, after varying the levels for Hub shape and Assembly Method.**
+
+
+The statistical significance of the 3-way Interaction term and the plot above allows us to infer the following :
+
+1. Choice of Hole Type affects the Mean Torque values differently based on the different combinations of Hub Shape and Assembly Method that is selected.
+
+2. Choice of Hub Shape affects the Mean Torque values differently based on the different combinations of Assembly Method and Hole Type that is selected.
+
+3. Choice of Assembly Method affects the Mean Torque values differently based on the different combinations of Hole Type and Hub Shape that is selected.
+
+
+***Another way of interpreting the 3 way Interaction in the above plot would be - The effect of interaction between Assembly Method and Hub shape, depends on the level of Hole Type. *** 
+
+For example, from the above plot, choice of Hole 2 produces a greater Mean Torque compared to Hole 1 when Hub 1 and Assembly 1 have been selected. Changing either Hub/Assembly levels changes the way Hole Type affects Torque values(Changing Hole Type from 1 to 2 doesn't seem to produce any significant difference in Mean Torque values when Hub 1 and Assembly 2 are selected).
+
+Basically, a three-way interaction means that one, or more, two-way interactions differ across the levels of a third variable.
+
+
+We can recursively observe the 3-way Interactions by keeping Hole Type fixed at Hole 1 and Hole 2 and checking the Interactions between Hub Shape and Assembly Method. Then we can fix Hub Shape at 1 or 2 and observe how Assembly Method affects Mean Torque Values.
+
+```{r }
+
+df1 <- subset(inp.data, inp.data$Hole=="Hole1", select = -Hole)
+interaction.plot(df1$Hub,df1$Assembly,df1$Torque,main="2 Way Interaction for Hole 1", xlab = "Hub Type", ylab = "Mean Torque", legend =TRUE, trace.label = "Assembly Method")
+
+df2 <- subset(inp.data, inp.data$Hole=="Hole2", select = -Hole)
+interaction.plot(df2$Hub,df2$Assembly,df2$Torque,main="2 Way Interaction for Hole 2", xlab = "Hub Type", ylab = "Mean Torque", legend =TRUE, trace.label = "Assembly Method")
+
+df3 <- subset(df1, df1$Hub=="Hub1", select = -Hub)
+plotmeans(Torque~ Assembly,xlab="Assembly",ylab="Torque",main="For Hole 1 and Hub 1",data = df3)
+
+df4 <- subset(df1, df1$Hub=="Hub2", select = -Hub)
+plotmeans(Torque~ Assembly,xlab="Assembly",ylab="Torque",main="For Hole 1 and Hub 2",data = df4)
+
+```
+
+Above, we have plotted Interactions for :
+
+1. Keeping Hole Type fixed at 1 and checking Interactions for Hub and Assembly.
+
+2. Keeping Hole Type fixed at 2 and checking Interactions for Hub and Assembly.
+
+The Interaction between Hub and Assembly seems to change for the two levels of Hole Type.
+
+Next we plotted :
+
+1. Hole Type = 1 and Hub Shape = 1 (fixed) to give Effect of Assembly on Mean Torque.
+
+2. Hole Type = 1 and Hub Shape = 2 (fixed) to give Effect of Assembly on Mean Torque.
+
+We can observe how fixing the levels of Hole and Hub factors impacts the choice of Assembly Method on Mean Torques.
+
+The 2-way Interaction Effects can be visualized as follows:
+```{r }
+interaction.plot(inp.data$Hole,inp.data$Assembly,inp.data$Torque,main="2 Way Interaction - Hole vs Assembly")
+interaction.plot(inp.data$Assembly,inp.data$Hub,inp.data$Torque,main="2 Way Interaction - Assembly vs Hub")
+interaction.plot(inp.data$Hole,inp.data$Hub,inp.data$Torque,main="2 Way Interaction - Hole vs Hub")
+```
+
+Each of the above plots indicates that there are 2-way Interactions between each of the Factors. While the plots don't show "explicit" Interactions (indicated by intersection of lines), the non-parallel nature of the plot indicates Ordinal Interactions.
+We can infer the following from the ANOVA table and the above plots (keeping in mind the 3-way Interaction):
+
+1. The relationship between Hole Type and Torque values depends on the value of Assembly Method. Similarly, the relationship between Assembly Method and Torque values depends on the value of Hole type.
+
+2. The relationship between Assembly Method and Torque values depends on the value of Hub shape. Similarly, the relationship between Hub shape and Torque values depends on the value of Assembly Method.
+
+3. The relationship between Hole Type and Torque values depends on the value of Hub shape. Similarly, the relationship between Hub Shape and Torque values depends on the value of Hole Type.
+
+NOTE : All of the above inferences can be made keeping in mind the significance of the F-values obtained for 3-way and 2-way Interactions in the ANOVA table.
+
+The Main Effects (keeping in mind the 2-way and 3-way Interaction Effects) can be visualized as follows:
+
+```{r}
+plotmeans(Torque~ Hole,xlab="Hole",ylab="Torque",main="Mean Torque for Hole Levels",data = inp.data)
+plotmeans(Torque~ Assembly,xlab="Assembly",ylab="Torque",main="Mean Torque for Assembly Levels",data = inp.data)
+plotmeans(Torque~ Hub,xlab="Hole",ylab="Hub",main="Mean Torque for Hub Levels",data = inp.data )
+```
+
+A visual inspection indicates the following:
+
+1. Mean Torque for Hole 2 is greater than Mean Torque for Hole 1.
+
+2. Mean Torque for Assembly 1 is greater than Mean Torque for Assembly 2.
+
+3. Mean Torque for Hub 2 is greater than Mean Torque for Hub 1.
+
+We can infer statistical significance of the differences in Mean Torque values for each of the above case only after performing a Tukey Honest Significant Difference (HSD) Test.
+
+A Table containing the Mean Torque Values for each Combination of the given factors as well as the Grand Mean is as shown below :
+
+```{r warning=FALSE}
+
+fm <- aov(Torque ~ Hole*Hub*Assembly + SID, data = inp.data)
+model.tables(fm, data = inp.data, type = "means")
+```
+
+
+
+Before we proceed with Tukey HSD Test, we need to test if the ANOVA Model we have fitted is adequate i.e. it holds up to Residual Analysis.
+
+<P style="page-break-before: always">
+
+
+>Residual Analysis
+
+```{r fig.height=4, fig.width=4}
+model <- aov(Torque~Hole*Assembly*Hub+SID ,data =inp.data )
+res<-resid(model)
+plot(model,which=c(1,2))
+
+```
+
+From the above NQQ plot, it would appear the the Residuals are Normal. We can test this formally as follows:
+
+H~0~ : The given data follows a Normal Distribution.
+
+H~1~ : The given data doesn't follow a Normal Distribution.
+
+```{R Normality test}
+normtest(res)
+```
+The p-value indicates the Residuals obtained follow a Normal Distribution.
+
+
+Plotting the Residuals against various Factors :
+
+```{r Residual Charts}
+plot(as.numeric(inp.data$Hole),res,xlab="Hole",ylab="Residuals")
+plot(as.numeric(inp.data$Assembly),res,xlab="Assembly",ylab="Residuals")
+plot(as.numeric(inp.data$Hub),res,xlab="Hub",ylab="Residuals")
+ plot(as.numeric(inp.data$SID),res,xlab="Subjects",ylab="Residuals")
+```
+
+
+While variance seems to be equal across the different groups, we can formally Test it as follows:
+
+H~0~ : The variance is equal across the groups.
+
+H~1~ : The variance is unequal across the groups.
+
+
+Bartlett's Test
+```{r Bartlett Test to check equal Variance}
+bartlett.test(res~inp.data$Hole)
+bartlett.test(res~inp.data$Assembly)
+bartlett.test(res~inp.data$Hub)
+```
+
+Based on the p-values obtained for the 3 factors above, we can conclude that variance in Residuals across each of the different factor groups is equal.
+
+Also, the Residuals plotted against Subjects gives no visible pattern so we can conclude that the ANOVA Model we have fitted is adequate.
+
+
+Finally, we can check for statistical significance of differences in Mean Torque Values across different Treatment Groups using a Tukey HSD Test.
+
+>Significance of difference in Mean Torque values across Treatment groups
+
+```{r echo=FALSE, warning=FALSE}
+levels(inp.data$Hole)[levels(inp.data$Hole)=="Hole1"] <- "H1"
+levels(inp.data$Hole)[levels(inp.data$Hole)=="Hole2"] <- "H2"
+levels(inp.data$Assembly)[levels(inp.data$Assembly)=="Assembly1"] <- "A1"
+levels(inp.data$Assembly)[levels(inp.data$Assembly)=="Assembly2"] <- "A2"
+levels(inp.data$Hub)[levels(inp.data$Hub)=="Hub1"] <- "Hu1"
+levels(inp.data$Hub)[levels(inp.data$Hub)=="Hub2"] <- "Hu2"
+
+
+model <- aov(Torque~Hole*Assembly*Hub+SID ,data =inp.data )
+tukey <- TukeyHSD(model)
+tukey
+
+mar.default <- c(5,4,4,2) + 0.1
+par(mar = mar.default + c(0, 4, 0, 0))
+plot(TukeyHSD(model,"Hole"))
+plot(TukeyHSD(model,"Assembly"))
+plot(TukeyHSD(model,"Hub"))
+tukey <- TukeyHSD(model,"Hole:Assembly")
+
+psig=as.numeric(apply(tukey$`Hole:Assembly`[,3:2],1,prod)>=0)+1
+op=par(mar=c(4.2,9,3.8,2))
+plot(tukey,col=psig,yaxt="n")
+for (j in 1:length(psig)){
+axis(2,at=j,labels=rownames(tukey$`Hole:Assembly`)[length(psig)-j+1],
+     las=1,cex.axis=.8,col.axis=psig[length(psig)-j+1])
+}
+par(op)
+
+tukey <- TukeyHSD(model,"Hole:Hub")
+
+psig=as.numeric(apply(tukey$`Hole:Hub`[,3:2],1,prod)>=0)+1
+op=par(mar=c(4.2,9,3.8,2))
+plot(tukey,col=psig,yaxt="n")
+for (j in 1:length(psig)){
+axis(2,at=j,labels=rownames(tukey$`Hole:Hub`)[length(psig)-j+1],
+     las=1,cex.axis=.8,col.axis=psig[length(psig)-j+1])
+}
+par(op)
+tukey <- TukeyHSD(model,"Assembly:Hub")
+
+psig=as.numeric(apply(tukey$`Assembly:Hub`[,3:2],1,prod)>=0)+1
+op=par(mar=c(4.2,9,3.8,2))
+plot(tukey,col=psig,yaxt="n")
+for (j in 1:length(psig)){
+axis(2,at=j,labels=rownames(tukey$`Assembly:Hub`)[length(psig)-j+1],
+     las=1,cex.axis=.8,col.axis=psig[length(psig)-j+1])
+}
+par(op)
+
+tukey <- TukeyHSD(model,"Hole:Assembly:Hub")
+psig=as.numeric(apply(tukey$`Hole:Assembly`[,3:2],1,prod)>=0)+1
+op=par(mar=c(6.2,11,5.8,4))
+plot(tukey,col=psig,yaxt="n")
+for (j in 1:length(psig)){
+axis(2,at=j,labels=rownames(tukey$`Hole:Assembly:Hub`)[length(psig)-j+1],
+     las=1,cex.axis=.8,col.axis=psig[length(psig)-j+1])
+}
+par(op)
+```
+
+
+In the above Plot, the Values marked in Black indicate those configurations of Factor Variables that have no Significant Difference in Mean Torque Values namely :
+
+1. Hole Type 2, Assembly Method 2, Hub Shape 1 and Hole Type 1, Assembly Method 1, Hub Shape 1 have no significant difference in the Mean Torque Values.
+
+2. Hole Type 2, Assembly Method 2, Hub Shape 1 and Hole Type 1, Assembly Method 2, Hub Shape 1 have no significant difference in the Mean Torque Values.
+
+For the remaining 26 combinations of Factor levels, it can be seen that there are significant differences in the mean values for Torques produced.
+
+<P style="page-break-before: always">
+
+
+>Conclusion
+
+We would recommend proceeding with **Hole Type 2, Assembly Method 1 and Hub Shape 2** for obtaining Spyders that are the most resistant to destructive testing (high Torque values).
+
+One of the main goals of ANOVA is establishing the order of importance between various Factors and their Interactions. Based on our Analysis, the following list has been created that ranks the various factors in descending order of Importance :
+
+1.Hub
+
+2.Assembly
+
+3.Hole
+
+4.Hole : Assembly
+
+5.Hole : Assembly : Hub
+
+6.Hole : Hub
+
+7.Hub : Assembly
+
