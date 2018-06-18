@@ -1,0 +1,561 @@
+---
+title: "Regression_Assignment_2"
+author: "Karthick~Rahul"
+date: "2 March 2018"
+output:
+  word_document: default
+  html_document: default
+---
+
+<P style="page-break-before: always">
+
+
+> Problem Statement
+
+The data file auto.data contains information on 
+
+1. miles per gallon (mpg)
+2. number of engine cylinders
+3. engine displacement in cubic inches
+4. engine horsepower
+5. body weight in lbs.
+6. acceleration
+7. last two digits of the year of the model
+8. country of origin (coded as 1 for American, 2 for European and 3 for Japanese)
+9. and the name or make of 397 passenger cars
+
+The dependent variable of interest i.e. the model sought, is that for a car's mileage (mpg), relating it to the remaining independent variables. Among these independent variables, we have no interest in year and name of the cars.
+
+
+> Visualization
+
+It might be impossible to graphically display the simultaneous effects of all the independent variables on the dependent variable in a single image. With the aid of a minimum number of graphical images, displaying the simultaneous effects of as many of the independent variables as possible,
+briefly explain how the mileage of a car (mpg) is related to which of the independent variables.
+
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(car)
+library(corrplot)
+library(MASS)
+library(lmtest)
+
+
+```
+
+
+```{r required functions, echo=FALSE}
+resAnalysis <- function(model){
+  x <-model$residuals/(summary(model)$sigma*sqrt(1-influence(model)$hat))
+  hist(x)
+  plot(model)
+  print(normtest(x))
+  print(bptest(model))
+  print("Outliers in the data :")
+  print(outliers(x))
+}
+
+outliers <- function(x){
+  return(boxplot(x, main = "Residual Plot")$out)
+}
+
+normtest<-function(x)
+{
+  
+  library(nortest)
+  s<-shapiro.test(x)
+  ad<-ad.test(x)
+  cvm<-cvm.test(x)
+  ll<-lillie.test(x)
+  sf<-sf.test(x)
+  dfnorm<-data.frame(Method=c(s$method,ad$method,cvm$method,ll$method,sf$method),
+                 P.value=c(s$p.value,ad$p.value,cvm$p.value,ll$p.value,sf$p.value))
+  return(dfnorm)
+}
+
+
+```
+
+```{r dataset}
+#Dowloading the entire dataset
+df <- read.table("auto.data",header = TRUE)
+df$year <- NULL
+df$name <- NULL
+str(df)
+head(df)
+print("Total variables in the model")
+colnames(df)
+```
+
+```{R cylinders}
+print("Only two variables of the seven seem to take levels : number of cylinders and Origin")
+
+print("summary on the cylinders ")
+table(df$cylinder)
+```
+
+
+```{r origin}
+print("summary of Origin of the cars ")
+table(df$origin)
+```
+
+We observed that there were 5 rows in the data that had NA values for horsepower. Since this is less 2% of the total rows of data, we can safely omit these values from the dataset. 
+
+```{r Checking na values}
+df <- na.omit(df)
+str(df)
+```
+
+
+
+Since 3- and 5-Cylinder Vehicles have only 4 and 3 rows of data, we can club them together into the 4-Cylinder category of vehicles.
+
+
+```{r cylinder_adjustment}
+
+#considering the cylinder at only three levels
+for ( i in 1:nrow(df)){ 
+  if (df$cylinders[i] == 3){
+    df$cylinders[i] = 4
+  }
+  if (df$cylinders[i] ==5){
+    df$cylinders[i] = 4
+  }
+}
+#Final table cylinders summary before encoding
+table(df$cylinder)
+
+```
+
+```{r}
+boxplot(df$mpg~df$cylinders, xlab = "No of Cylinders", ylab = "Miles per gallon (mpg)")
+
+```
+
+We know that increasing the number of Cylinders in a Car increases its pulling capacity and fuel consumption. This means that increasing the number of Cylinders in a Car decreases its mileage. The above boxplot confirms our suspicion.
+
+
+
+```{r}
+boxplot(df$mpg~df$origin, xlab = "Origin (1-American 2-European 3-Japanese)", ylab = "Miles per gallon (mpg)")
+
+```
+Conventional wisdom in Cars would tell us that the Japanese car makers usually focus on mileage of the car (higher fuel efficiency) and their cars are known for their efficient performance. SImilarly, European Manufacturers focus on riding comfort and at the same time mileage, without trying to sacrifice one for the other. US Car manufacturers consider cars as luxury goods and the focus is on comfort over mileage.
+
+As can be seen from the above boxplot, we can conclude that the data is in accordance with our assumption regarding miles per gallon (mpg) for cars of 3 different origins.
+
+
+To observe the relationship between the other quantitative varialbes and mpg, we can check the scatterplot matrix below and observe the values, separately colored for Cylinder Types and Country of Origin.
+
+
+```{r cor_function}
+panel.cor <- function(x, y, digits = 2, cex.cor, ...)
+{
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  # correlation coefficient
+  r <- cor(x, y)
+  txt <- format(c(r, 0.123456789), digits = digits)[1]
+  txt <- paste("r= ", txt, sep = "")
+  text(0.5, 0.6, txt)
+
+  # p-value calculation
+  p <- cor.test(x, y, method = "pearson")$p.value
+  txt2 <- format(c(p, 0.123456789), digits = digits)[1]
+  txt2 <- paste("p= ", txt2, sep = "")
+  if(p<0.01) txt2 <- paste("p ", "< 0.01", sep = "")
+  text(0.5, 0.4, txt2)
+}
+```
+
+```{r, warning=FALSE}
+scatterplotMatrix(~mpg+displacement+horsepower+weight+acceleration|cylinders , data=df,main="Three different Cylinders(4,6,8)",lower.panel = panel.cor)
+
+```
+Observing the scatter of points for the 3 different Cylinder numbers, we can see that each of them appears distinct for each of the quantitative values shown above.
+
+For example, considering the plot for mpg vs displacement, we can observe that 4 Cylinder cars appear to have higher mpg for lower displacement values as compared to 6 cylinder cars.
+
+
+
+
+```{r}
+scatterplotMatrix(~mpg+displacement+horsepower+weight+acceleration|origin , data=df,main="Three different Origins (1,2,3)",lower.panel = panel.cor)
+
+```
+Observing the scatter of points for the 3 origin countries, we can see that American made Cars(1) are distinct from Japanese(3) and European(2) made Cars, both of which appear to be dispersed in similar regions of the plot.
+
+We can view the correlation between different quantitative variables in the dataset using the following visualization.
+```{r }
+rv <- cor(df, use = "complete.obs")
+corrplot(rv)
+```
+The size of the circle and the intensity of the shade of color are the indicators of correlation between two variables.
+
+
+**Inferences from the various Plots**
+
+```{r}
+scatterplotMatrix(~mpg+displacement , data=df,main="Mpg and displacement",lower.panel = panel.cor)
+
+```
+We can observe a slightly non-linear relationship between Displacement and mpg. They are negatively correlated (-0.805) and it is significant.
+
+
+```{r}
+
+scatterplotMatrix(~mpg+horsepower , data=df,main="Mpg and horsepower",lower.panel = panel.cor)
+
+
+```
+Again we observe a slightly non-linear relationship between mpg and horsepower with a correlation of (-0.78) which is significant.
+
+
+```{r}
+scatterplotMatrix(~mpg+acceleration , data=df,main="Mpg and acceleration",lower.panel = panel.cor)
+
+```
+There doesn't seem to be a proper relationship between mpg and acceleration. This can be further investigated.
+
+
+
+```{r}
+scatterplotMatrix(~mpg+weight , data=df,main="Mpg and Weight",lower.panel = panel.cor)
+
+```
+As can be seen from the above plot, Weight seems to have a linear relationship with mpg with a correlation of -0.83 which is significant.
+
+<P style="page-break-before: always">
+
+> Model Building
+
+***After accounting for the non-linear effects (if any) and the interactions (if any), present among the independent variables, as revealed through the preliminary visualization step above (or even otherwise, if your prior engineering knowledge compels you to do so), build the "best possible" regression model you can, according to the AIC criterion. You should automate this model building process with the aid of the R function stepAIC (residing in the library MASS), a successful deployment of which requires preliminary experimentation with a few "small" and a few "large" initial models, between which the "best" model is chosen; but must write one paragraph clearly describing the underlying algorithm, and more importantly its statistical logic, for selecting the "best possible" model.***
+
+Step 1 : We need to encode the categorical variables (Cylinders and Origin) for the regression function. It is done as follows:
+
+```{r }
+
+df_mod <- df
+
+for ( i in 1:nrow(df_mod)){
+  if (df_mod$cylinders[i] == 4){
+    df_mod$cy_dum1[i] = 0
+    df_mod$cy_dum2[i] = 0
+  }
+  if (df_mod$cylinders[i] == 6){
+    df_mod$cy_dum1[i] = 1
+    df_mod$cy_dum2[i] = 0
+  }
+  if (df_mod$cylinders[i] == 8){
+    df_mod$cy_dum1[i] = 0
+    df_mod$cy_dum2[i] = 1
+  }
+  if (df_mod$origin[i] == 1){
+    df_mod$or_dum1[i] = 0
+    df_mod$or_dum2[i] = 0
+  }
+  if (df_mod$origin[i] == 2){
+    df_mod$or_dum1[i] = 1
+    df_mod$or_dum2[i] = 0
+  }
+  if (df_mod$origin[i] == 3){
+    df_mod$or_dum1[i] = 0
+    df_mod$or_dum2[i] = 1
+  }
+}
+ 
+df_mod$cylinders <- NULL
+df_mod$origin <- NULL
+#head(filter(df_mod,cy_dum1 == 1))
+head(df_mod)
+
+```
+
+We can fit a First Order Regression Model as follows: 
+
+
+```{r multiple linear model - order 1}
+mlrm <- lm(mpg~displacement+horsepower+weight+acceleration+cy_dum1+cy_dum2+or_dum1+or_dum2,data =df_mod)
+summary(mlrm)
+```
+As can be seen from the summary, only Horsepower, weight, cy_dum1 and or_dum2 are significant when considering a full model.
+
+
+
+```{r setting up AIC}
+full_linear_model <- lm(formula = mpg ~ displacement + horsepower +weight + acceleration +cy_dum1 +cy_dum2 + or_dum2 +or_dum1 ,data =df_mod )
+
+#setting up the steps for MLRM 
+multistep <- stepAIC(full_linear_model,direction = "backward", scope=list(upper=~.,lower=~1), trace = FALSE)
+summary(multistep)
+multistep$anova
+```
+As can be seen from the results of the stepAIC function, the Final First Order Model obtained is as follows:
+
+mpg ~ displacement + horsepower + weight + cy_dum1 + cy_dum2 + or_dum2
+
+Note : stepAIC selects a model based on reduction in AIC values and not p-values. Therefore, it is possible that the model may contain certain insignificant terms.
+
+
+We can check the results of building a Model based on the results of AIC function :
+```{r }
+simple_linear <- lm(formula = mpg ~ displacement + horsepower + weight + cy_dum1 + 
+    cy_dum2 + or_dum2, data = df_mod)
+summary(simple_linear)
+AIC(simple_linear)
+```
+
+Since we are basing our model only on Akaike Information Criteria and not the significance of the terms, we let the insignificant terms remain in the Model.
+
+
+
+Eliminating the insignificant values (based on the p-values from the above results), we can build the next model as follows:
+
+```{r }
+simple_linear <- lm(formula = mpg ~  horsepower + weight + cy_dum1 + 
+     or_dum2, data = df_mod)
+summary(simple_linear)
+AIC(simple_linear)
+```
+Now that we have a Fitted First Order Model, we can do a residual analysis to see if the Residuals stand up to the assumptions of Homoscedasticity and Normality.
+
+
+```{r }
+resAnalysis(simple_linear)
+```
+
+As can be seen from the Residual Analysis, both Normality and Heteroscedasticity assumptions are violated. This implies, we need to transform the variables in our model to try and achieve Normality and Heteroscedasticity.
+
+Before attempting that, we can try Fitting a Second Order Model before we proceed with transforming variables.
+
+```{r higherOrderModel}
+# Fitting square models  after setting up the lower as constant number and upper as Square function of SLRM
+#First Order MLRM
+mlrm <- lm(mpg~displacement+horsepower+weight+acceleration+cy_dum1+cy_dum2+or_dum1+or_dum2,data =df_mod)
+
+lowerModel <-  lm(mpg ~ 1, data=df_mod)
+upperModel <- lm(mpg ~ (.)^2, data = df_mod)
+multistep2 <- stepAIC(mlrm,direction = "both", scope=list(upper= upperModel,lower= lowerModel), trace= FALSE)
+summary(multistep2)
+
+```
+
+Based on AIC, a second order Model is given as follows:
+
+mpg ~ displacement + horsepower + weight + acceleration + 
+    cy_dum1 + cy_dum2 + or_dum1 + or_dum2 + displacement:horsepower + 
+    horsepower:cy_dum1 + displacement:or_dum2 + horsepower:or_dum2 + 
+    acceleration:or_dum1 + acceleration:cy_dum2 + horsepower:acceleration + 
+    acceleration:cy_dum1 + displacement:cy_dum2
+
+The 2nd Order Model can be viewed as follows:
+
+```{r Second Order Model Results}
+second_order_model <- multistep2
+summary(second_order_model)
+```
+As can be seen, there are some insignificant terms in the 2nd Order Model because the selection of Variables was done on the basis on AIC and not p-value significance.
+
+For now, we let the insignificant terms remain and do a Residual Analysis of the Model we have.
+
+```{r Residual Analysis - Second Order Model based on AIC}
+resAnalysis(second_order_model)
+```
+
+As can be seen from the test results above, for the 2nd Order Model also, Normality Tests and Breusch-Pagan Tests have failed indicating that Normality and Homoscedasticity Assumptions are violated.
+
+
+We can try a Log Transformation on the mpg variable and then fitting a second Order Model. 
+
+
+1. Log Transformation
+
+```{r LogtransformResponseVariable}
+df_mod2 <- df_mod
+df_mod2$lmpg <- log(df_mod2$mpg)
+df_mod2$mpg <- NULL
+head(df_mod2)
+```
+
+Fitting a second Order Model as follows:
+
+```{r second order model after log transform}
+# Fitting square models  after setting up the lower as constant number and upper as Square function of SLRM
+#First Order MLRM
+mlrm <- lm(lmpg~displacement+horsepower+weight+acceleration+cy_dum1+cy_dum2+or_dum1+or_dum2,data =df_mod2)
+
+lowerModel <-  lm(lmpg ~ 1, data=df_mod2)
+upperModel <- lm(lmpg ~ (.)^2, data = df_mod2)
+multistep2 <- stepAIC(mlrm,direction = "both", scope=list(upper= upperModel,lower= lowerModel), trace= FALSE)
+summary(multistep2)
+```
+
+
+```{r Second Order Model Results - After Log Transform}
+second_order_model_log <- multistep2
+summary(second_order_model_log)
+```
+
+```{r Residual Analysis - Second Order Model based on AIC - Log}
+resAnalysis(second_order_model_log)
+```
+
+The test for Normality and Heteroscedasticity still fails, so we can attempt to remove some Outliers from the data.
+
+2. Removing the Outliers
+
+```{r removingOutliers - log model}
+df_mod_3 <- df_mod2[c(-20, -60,-103, -112, -310,-323, -334,-336,-370,-387),] 
+```
+
+```{r second order model after log transform and outlier removal}
+# Fitting square models  after setting up the lower as constant number and upper as Square function of SLRM
+#First Order MLRM
+mlrm <- lm(lmpg~displacement+horsepower+weight+acceleration+cy_dum1+cy_dum2+or_dum1+or_dum2,data =df_mod_3)
+
+lowerModel <-  lm(lmpg ~ 1, data=df_mod_3)
+upperModel <- lm(lmpg ~ (.)^2, data = df_mod_3)
+multistep3 <- stepAIC(mlrm,direction = "both", scope=list(upper= upperModel,lower= lowerModel), trace= FALSE)
+summary(multistep3)
+```
+
+```{r Second Order Model Results - After Log Transform and Outliers}
+second_order_model_log_outlier1 <- multistep3
+summary(second_order_model_log_outlier1)
+```
+
+```{r Residual Analysis - Second Order Model based on AIC - Log and Outliers}
+resAnalysis(second_order_model_log_outlier1)
+```
+
+
+Based on the Residual Analysis, we can see that the Normality and Heteroscedasticity Assumption still fails.
+
+We can try removing one more set of Outliers as given by the Outlier Analysis above.
+
+3. Removing Outliers for the second time
+
+```{r removingOutliers - log model - Outlier 2}
+df_mod_4 <- df_mod_3[c(-60,-103, -112, -310,-323, -334,-387),] 
+```
+
+```{r second order model after log transform and outlier removal - part 2}
+# Fitting square models  after setting up the lower as constant number and upper as Square function of SLRM
+#First Order MLRM
+mlrm <- lm(lmpg~displacement+horsepower+weight+acceleration+cy_dum1+cy_dum2+or_dum1+or_dum2,data =df_mod_4)
+
+lowerModel <-  lm(lmpg ~ 1, data=df_mod_4)
+upperModel <- lm(lmpg ~ (.)^2, data = df_mod_4)
+multistep4 <- stepAIC(mlrm,direction = "both", scope=list(upper= upperModel,lower= lowerModel), trace= FALSE)
+summary(multistep4)
+```
+
+```{r Second Order Model Results - After Log Transform and Outliers - part 2}
+second_order_model_log_outlier2 <- multistep4
+summary(second_order_model_log_outlier2)
+```
+
+```{r Residual Analysis - Second Order Model based on AIC - Log and Outliers - part 2}
+resAnalysis(second_order_model_log_outlier2)
+```
+As can be seen from the above results, the Normality Assumption is validated based on Lilliefors (Kolmogorov-Smirnov) normality test	but the Homoscedasticity assumption is still not valid. Removing further Outliers doesn't seem to affect the Breusch-Pagan Test results much.
+
+Note : We tried Fitting a 3rd Order Model but none of the 3rd Order Terms were significant and stepAIC returned the same 2nd Order Model we have presented below.
+
+Therefore, we present our Final Model as follows:
+
+lmpg ~ displacement + horsepower + weight + acceleration + cy_dum1 + cy_dum2 + or_dum1 + or_dum2 + horsepower:cy_dum1 + acceleration:cy_dum2 + horsepower:acceleration + acceleration:or_dum1 + horsepower:or_dum2 + acceleration:cy_dum1 + weight:or_dum2 + displacement:cy_dum2 + weight:acceleration
+
+```{r Final 2nd Order Model presentation}
+summary(second_order_model_log_outlier2)
+
+```
+
+
+If our analysis was based SOLELY on Akaike Information Criteria, we would stop the Analysis here and let the insignificant terms remain.
+
+
+
+> Diagnostics 
+
+***Carry out a detailed diagnostic check through residual analysis of the fitted model, ensuring that the data fits the model well, conforming to all the underlying model assumptions.***
+
+We have performed diagnostics (Residual Analysis) for the previous models in the previous section. We reproduce the Residual Analysis here again.
+
+```{r Residual Analysis - final second model}
+resAnalysis(second_order_model_log_outlier2)
+```
+
+As can be seen from the Normality Tests, the Normality Assumption is valid. The results of Breusch-Pagan Test shows that the residuals are not strictly homoscedastic. We take a look at the Residual Plot and we believe there is no visible pattern so we choose to accept the Model (despite it failing the Homoscedasticity Assumption).
+
+(We believe that applying a different transformation like Box-Cox or successively removing outliers from the given data, we would be able to achieve Homoscedasticity in residuals.)
+
+
+> Conclusion
+
+***Based on the fitted model and your graphical (as well as subjective engineering) understanding, explain how the different independent variables considered in this study, are "affecting" the gas mileage of different cars. ***
+
+The proposed model based on AIC :
+
+lmpg ~ displacement + horsepower + weight + acceleration + cy_dum1 + cy_dum2 + or_dum1 + horsepower:cy_dum1 + acceleration:cy_dum2 + horsepower:acceleration + acceleration:or_dum1 + displacement:cy_dum2 + 
+    acceleration:cy_dum1 + weight:cy_dum2
+
+The proposed model based on AIC after removing Insignificant terms :
+
+lmpg ~ displacement + horsepower + cy_dum1 + cy_dum2 + or_dum1 + horsepower:cy_dum1 + acceleration:cy_dum2 + horsepower:acceleration + acceleration:or_dum1 + displacement:cy_dum2 + acceleration:cy_dum1
+
+
+log(mpg) = 4.175 - 0.002(displacement) + 0.003(horsepower) - 0.988(cy_dum1) - 1.581(cy_dum2) - 0.672(or_dum1) + 0.0043(horsepower x cy_dum1) + 0.071(cy_dum2 x acceleration) - 0.0005 (horsepower x acceleration) + 0.035(or_dum1 x acceleration) + 0.002(displacement x cy_dum2) + 0.034 (cy_dum1 x acceleration)
+
+We can make the following inferences from the Model we have :
+
+1. Displacement has a linear effect on Log mpg values keeping in mind the linear effect of other terms.
+
+2. Horsepower has a linear effect on Log mpg values keeping in mind the linear effect of other terms.
+
+3. Each of the Cylinder values (4,6,8) has a different linear effect on log mpg values keeping in mind the linear effect of the other terms.
+
+4. If the country of origin is Europe, the intercept varies for log mpg, keeping in mind the linear effects of the other terms.
+
+5. The interaction between horsepower and number of cylinders implies that based on the number of cylinders, horsepower affects log mpg differently.
+
+6. The interaction between acceleration and number of cylinders implies that based on the number of cylinders, the acceleration of a given car affects log mpg values differently.
+
+7.The interaction between horsepower and acceleration implies that for different values of horsepower, acceleration affects the log mpg values differently.
+
+8. The interaction between acceleration and country of origin implies that based on different countries of origin, the acceleration affects the log mpg values differently.
+
+9. The interaction between displacement and number of cylinders implies that based on the number of cylinders, different number of cylinders affects how displacement values affect log mpg values.
+
+10. Based on the interaction between number of cylinders and acceleration, we can claim that different number of cylinders causes acceleration values to affect log mpg values differently.
+
+
+
+
+<P style="page-break-before: always">
+
+***Akaike Information Criteria***
+
+Short Note on Step AIC algorithm and why it selects the best possible Model
+
+AIC is a method that combines a measure of model fit with a measure of model Complexity. It can be written as :
+
+AIC = -2logL + 2p
+
+L = Maximum Likelihood of the data using the Model
+p = Number of parameters in the Model
+
+Here, -2logL is a function of the prediction Error. It measures how the Model fits the data. The smaller the value, the better the fit.
+
+2p term penalizes more complex models so again, the smaller the value of this term, the better.
+
+Stepwise Selection with AIC
+
+The aim is to look for a model with the smallest AIC:
+
+1. start with some model, simple or complex
+
+2. do a forward step as well as a backward step based on AIC until no predictor should be added, and no predictor should be removed
+
+The stepAIC() function in R can be used to perform this. All arguments in the stepAIC() function are set to default. If you want to set direction of stepwise regression (e.g., backward, forward, both), the direction argument should be assigned. The stepAIC() function also allows specification of the range of variables to be included in the model by using the scope argument. The lower model is the model with smallest number of variables and the upper model is the largest possible model. Both upper and lower components of scope can be explicitly specified. If scope is a single formula, it specifies the upper component, and the lower model is empty. If scope is missing, the initial model is the upper model. Recall that "^" symbol denotes interactions up to a specified degree. In our case, we specified two-degree interactions among all possible combinations of variables. Elements within I() are interpreted arithmetically.
+
