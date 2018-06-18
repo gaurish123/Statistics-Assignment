@@ -5,134 +5,24 @@ date: "17 April 2018"
 output: html_document
 ---
 
-```{r loadingData}
-df <- read.csv("C:\\Users\\Lenovo\\Desktop\\ML\\Time Series\\exchange_rate.data")
+<P style="page-break-before: always">
 
-df$Date <- as.Date(df$Date, format = "%B %d,%Y")
-
-df <- df[order(df$Date),]
-
-price <- as.ts(df$Price)
-
-lPrice <- log(price)
-```
-
-####Visualisation of the Time Series data
-
-```{r }
-plot(price)
-plot(lPrice)
-```
-We wont be able to decide any model just by using the Time Series plot. but we may see the need for various actions.
-
-There is an obvious linear upward trend in the price movement.
-We may need a first difference to make it into a stationary series.
-( A quadratic trend might need a 2nd order difference )
-
-In general, all the price objects fit in perfectly for a log transformation.
-for ARIMA models its better to use log transformation because, the model doesn't have to deal with multiplicative nature of the seasonality or trend. The variation will also be consistent for log models.
-
-Note: Log transformation are bad for values closer to zero.
-
-```{r sqrtTransformation}
-plot(sqrt(price))
-```
-
-Here the plot shows the sqrt transformation of the time series data, which is also similar to that of the log transformation. we will continue to use the log transforamtion for the mentioned advantages.
-
-```{r acfAndPacf}
-acf(lPrice)
-pacf(lPrice,ylim = c(-0.1,0.2))
-```
-The ACF and PACF should be considered together.  It can sometimes be tricky going, but a few combined patterns do stand out.
-
-####Some general notes on the ACF and PACF plot 
-
-MA models have theoretical ACFs with non-zero values at the MA terms in the model and zero values elsewhere.
-
-ARMA models (including both AR and MA terms) have ACFs and PACFs that both tail off to 0. The most Trickiest Plot. Basically you just have to guess that one or two terms of each type may be needed and then see what happens when you estimate the model.
-
-If all autocorrelations are non-significant, then the series is random (white noise; the ordering matters, but the data are independent and identically distributed.), which is our desire.
-
-If you have taken first differences and all autocorrelations are non-significant, then the series is called a random walk and we are done.
-
-***If the ACF and PACF do not tail off, but instead have values that stay close to 1 over many lags, the series is non-stationary and differencing will be needed.  Try a first difference and then look at the ACF and PACF of the differenced data.***
-
-
-Clear Indication of the ARIMA model.
-
-####Description of the Weekly Price Series:
-
-1. Clear Indication of the upward trend ( Log - Price)
-
-2. From the PACF plot, we can guess that one difference is requirred and then we have to look at the ACF and PACF of the differenced series.
-
-below are the test for checking for unit roots by fitting an AR model over the data.
-
-
-```{r testOnLogSeries, warning=FALSE}
+```{r requiredLibraries, warning=FALSE}
 library(tseries)
-batteryTest <- function(x){
+```
+
+```{r requiredFunctions}
+autocorrTests <- function(x){
   p.value.adf <- adf.test(x)$p.value
   p.value.pp <- pp.test(x)$p.value
   p.value.kpss <- kpss.test(x)$p.value
-  cat("The Results of the test for Unit Root")
+  cat("The Results of the Tests:\n")
   cat("ADF Test ", "P.Value", " ",p.value.adf,"\n", sep="")
   cat("PP Test ", "P.Value", " ",p.value.pp,"\n", sep="")
   cat("KPSS Test ", "P.Value"," ", p.value.kpss,"\n", sep="")
-  }
+}
 
-batteryTest(lPrice)
-```
-
-The above battery of test are conducted to check for unit roots. 
-
-Hypothesis for ADF test and PP test
-
-H0: psi* = 0 , Not a Stationary Process
-H1: psi* < 0 , Stationary Process
-
-Hypothesis for KPSS test
-
-The hypothesis tests for trend stationary.
-
-To estimate sigma^2 the Newey-West estimator is used.
-
-H0: sigma2 = 0, Stationary process
-H1: sigma2 != 0, Not a stationary process
-
-The tests clearly shows that data is not stationary.
-
-```{r, warning=FALSE}
-dlPrice <- diff(lPrice)
-batteryTest(dlPrice)
-```
-
-After taking the difference of the Price Series we can arrive at a series which is stationary according to the ADF, PP, KPSS tests.
-
-Lets try to look at the ACF and PACF plots of the series.
-
-```{r acfAndPacfDiff}
-acf(dlPrice)
-pacf(dlPrice)
-```
-
-We can observe from the plot that the first 2 lags of the ACF are significant, after which that values tapper to zero and insignificant.
-
-similarly we can observe the PACF lags becomes significant at equal intervals.
-
-MA model with 2 lags and AR with 2 lags.
-
-```{r boxTest}
-Box.test(dlPrice,lag=30)
-Box.test(dlPrice,lag=30,type="L")
-```
-
-Not a white noise, since auto correlation exist.
-
-add hypothesis
-
-```{r }
+#Returns a Matrix of AIC values for ARIMA(p,1,q) Models
 arma_aics<-function(x,P,d,Q)
 {
  aics<-matrix(nrow=P+1,ncol=Q+1)
@@ -145,15 +35,210 @@ if( mdl$code==0 ) aics[p+1,q+1]<-mdl$aic
  return(aics)
 }
 
+#Function for Plotting Impulse Response Function
+irfplot<-function (irf, s)
+{
+ n <- length(irf)
+ plot(c(0,n+1), range(c(irf,1)), type = "n",xlab = "Time", ylab = "IRF", main = s)
+ lines(c(0,n+1),c(0,0))
+ lines(c(0,0),c(0,1))
+ for (i in 1:n)
+ lines(c(i,i), c(0, irf[i]))
+}
+
+```
+
+
+> Problem Statement
+
+The data file in **exchange rate.data** contains weekly USD-INR rates (value of 1 USD in INR) starting from the first week of January 2001 till the last week of December 2017. It gives the Date, Price, Open, High, Low and
+percentage Change in this exchange rate, starting from recent to the past. This assignment
+is concerned only with the Price series.
+
+
+```{r loadingData}
+df <- read.csv("C:\\Users\\SONY VAIO\\Desktop\\time series\\exchange_rate.data")
+
+df$Date <- as.Date(df$Date, format = "%B %d,%Y")
+
+df <- df[order(df$Date),]
+
+price <- as.ts(df$Price)
+
+lPrice <- log(price)
+```
+
+
+> 1. First provide a verbal description of the evolution of the weekly Price series during this
+period, based on its time series plot.
+
+
+###Visualization of the Time Series Data
+```{r }
+plot(price, main="Plot of Price over Time")
+```
+```{r }
+plot(lPrice, main="Plot of Log-Price over Time")
+```
+
+
+From a preliminary observation of the Time Series plot, we may not be able to gain any concrete insight but it provides a customary outline of what are the possible actions that can be used to model the given Series.
+
+1. There is an obvious linear upward trend in the price movement. This implies that we may need a First order Difference to transform it into a stationary series. If stationarity is not achieved with this, we may have to investigate a Second Order Difference.
+
+2. From the log-Price Plot, we can observe that all the Price objects fit well for a log transformation.
+For ARIMA models, its better to use log transformation because, the model doesn't have to deal with multiplicative nature of the seasonality or trend. The variation will also be consistent for log models. We have to be careful for log Transformations for values closer to zero.
+
+We can also check the Square root transformation plot to see if it seems to give a "better" Plot for the given Time Series.
+
+```{r sqrtTransformation}
+plot(sqrt(price), main = "Plot of Sqrt(Price) over Time")
+```
+
+The square root Price Plot of the time series data appears to be similar to that of the log transformation Plot. For the rest of our analysis, we will continue to use the log transforamtion for the afore-mentioned advantages.
+
+###Plotting the ACF and PACF Plots
+
+
+The ACF and PACF should be considered together. This helps us in a preliminary determination of which order ARIMA terms to use, as well as to check the stationarity of the given Series.
+
+###Properties of ACF and PACF Plots for ARIMA processes
+
+MA models have theoretical ACFs with non-zero values at the MA terms in the model and zero values elsewhere.
+
+ARMA models (including both AR and MA terms) have ACFs and PACFs that both tail off to 0 which essentially makes it tricky to guess the p and q terms. Basically you just have to guess that one or two terms of each type may be needed and then see what happens when you estimate the model.
+
+If all autocorrelations are non-significant, then the series is random (white noise; the ordering matters, but the data are independent and identically distributed.), which is our desire.
+
+If you have taken first differences and all autocorrelations are non-significant, then the series is called a random walk and we are done.
+
+*If the ACF and PACF do not tail off, but instead have values that stay close to 1 over many lags, the series is non-stationary and differencing will be needed.  Try a first difference and then look at the ACF and PACF of the differenced data.*
+
+
+```{r acfAndPacf}
+#ACF
+acf(lPrice)
+
+#PACF
+pacf(lPrice,ylim = c(-0.1,0.2))
+```
+
+The ACF Plot shows that the values from Lag 1 onwards are close to 1. This gives an indication that the series is non-stationary and First Order differencing might be required to make the Series stationary.
+
+
+```{r }
+plot(diff(lPrice))
+```
+
+
+*NOTE:* As can be seen from the Plot of the difference of the Log-Price Series, the Variance appears to be varying with time. For such cases, basic ARIMA Models cannot be used and we would be better off trying to fit a ARCH or GARCH Models.
+
+
+
+>2. Next select an ARIMA model of an appropriate order, for the weekly log-Price series. You must clearly state your reasons (showing only the necessary details, but in a systematic step-by-step fashion), for selecting the model, by comparing it with a few of its neighboring competitors, if necessary. How well does the model finally selected, satisfy the model assumptions?
+
+
+###ARIMA Models
+
+Since the ACF and PACF plots indicated that the series might be non-stationary, a set of formal tests can be done to verify our assumptions.
+
+
+1. Augmented Dickey Fuller Test
+
+2. Phillips-Perron Test for Unit Root
+
+3. Kwiatkowski-Phillips-Schmidt-Shin Test (Null Hypothesis : Stationary Alternate Hypothesis : Unit Root) 
+
+
+below are the test for checking for unit roots by fitting an AR model over the data.
+
+
+```{r testOnLogSeries, warning=FALSE}
+
+autocorrTests(lPrice)
+```
+
+The above set of Tests are conducted to check for unit roots. 
+
+Hypothesis for ADF test and PP test
+
+H_0: psi* = 0 , Not a Stationary Process
+
+H_1: psi* < 0 , Stationary Process
+
+
+Hypothesis for KPSS test
+
+To estimate sigma^2 the Newey-West estimator is used.
+
+H_0: sigma2 = 0, Stationary process
+
+H_1: sigma2 != 0, Not a stationary process
+
+
+The tests clearly shows that Log Prices time series is not stationary.
+
+We can proceed with First Order differencing and check for stationarity again.
+
+```{r, warning=FALSE}
+##Differencing 1
+dlPrice <- diff(lPrice)
+
+#Checking stationarity
+autocorrTests(dlPrice)
+```
+
+The results of the First Order Differencing on Log-Prices has yielded a Stationary Series as per the results of the above tests.
+
+
+###ACF and PACF Plots for Differenced Series
+
+```{r acfAndPacfDiff}
+acf(dlPrice)
+pacf(dlPrice)
+```
+
+We can observe from the plot that the first 2 lags of the ACF are significant, after which that values taper to zero and remain insignificant.
+
+similarly we can observe the PACF lags becomes significant at equal intervals.
+
+
+Our first hunch regarding the model would therefore be one with MA(2) and AR(2) terms.
+
+###Checking for White Noise
+
+We can use the Box-Pierce and Ljung-Box Test to check if we have achieved White Noise. If we have, our Modeling is complete and we can stop here. If we haven't, we need to update our Model with the relevant terms.
+
+
+```{r boxTest}
+Box.test(dlPrice,lag=30)
+Box.test(dlPrice,lag=30,type="L")
+```
+The Null Hypothesis here states that there is no Autocorrelation between the residuals at different lags. 
+The low p-values rejects the Hypothesis and we can conclude that we do not have White Noise (i.e. there is dependence between terms in the series) and we must update the Model.
+
+
+###Function to fit ARIMA Models upto given Order
+
+We choose to use the Akaike Information Criteria to select a suitable ARIMA Model. The aim is to obtain a Model or a set of Models with the lowest possible AIC values.
+
+
+
+```{r ARIMA for 10x10, warning=FALSE}
+
 aic10 <- arma_aics(lPrice,10,1,10)
+
 ```
 
 ```{r View}
-#View(aic3)
-sort(aic3)[1:6]
+head(aic10)
+sort(aic10)[1:10]
 ```
 
-```{r }
+We can select the top 10 ARIMA Models based on the lowest AIC values obtained. This is done as follows:
+
+
+```{r warning=FALSE}
 model52 <- arima(lPrice,order=c(5,1,2),method = "ML")
 
 model25<- arima(lPrice,order=c(2,1,5),method = "ML")
@@ -176,99 +261,228 @@ model12 <- arima(lPrice,order=c(1,1,2),method = "ML")
 
 ```
 
+
+###ARIMA(5,1,2)
 ```{r }
 model52
 ```
+
+Eliminating insignificant Terms:
+
 ```{r }
 arima(lPrice,order=c(5,1,2),method = "ML",fixed=c(0,NA,0,NA,0,NA,NA))
 ```
+Since 5th Term for AR(5) is insignificant, we can take the next lower order Model.
+
+```{r }
+arima(lPrice,order=c(4,1,2),method = "ML",fixed=c(0,NA,0,NA,NA,NA))
+```
+The 4th term in AR(4) is insignificant. So we can drop that term and refit the Model. This would mean we would have to drop the 3rd term as well.
+
+If we proceed in this manner, all the terms in the above model are insignificant. 
+
+
+We can try another ARIMA Model as a starting point.
+
+
+###ARIMA(3,1,3)
+
+
 ```{r }
 model33
 ```
+1st term in MA(3) is insignificant, so we can drop that term.
+
 ```{r }
-model33
+arima(lPrice,order=c(3,1,3),method = "ML",fixed=c(NA,NA,NA,0,NA,NA))
 ```
-```{r }
-model33$aic
-model20$aic
-model02$aic
+All the terms are significant here and the AIC value is also acceptable.
+
+
+###Chosen Model 1 : arima(x = lPrice, order = c(3, 1, 3), fixed = c(NA, NA, NA, 0, NA, NA), method = "ML")
+
+
+###ARIMA(0,1,2)
+
+```{r}
+model02
 ```
+Even this is an acceptable(and simpler) Model that can be chosen.
+
+Chosen Model 2 : arima(x = lPrice, order = c(0, 1, 2), method = "ML")
+
+
+###ARIMA(2,1,0)
+
+```{r}
+model20
+```
+This model is also acceptable and simple.
+
+Chosen Model 3 : arima(x = lPrice, order = c(2, 1, 0), method = "ML")
+
+
+Finally, we narrowed down to 3 models that were acceptable (with no insignificant terms and comparatively low AIC values)
+
+***
+
+Chosen Model 1 : arima(x = lPrice, order = c(3, 1, 3), fixed = c(NA, NA, NA, 0, NA, NA), method = "ML")
+
+Chosen Model 2 : arima(x = lPrice, order = c(0, 1, 2), method = "ML")
+
+Chosen Model 3 : arima(x = lPrice, order = c(2, 1, 0), method = "ML")
+
+***
+
+
+Sometimes more than one model can seem to work for the same dataset.  When that's the case, some things you can do to decide between the models are:
+
+1. Possibly choose the model with the fewest parameters.
+
+2. Examine standard errors of forecast values.  Pick the model with the generally lowest standard errors for predictions of the future.
+
+3. Compare models with regard to statistics such as the MSE (the estimate of the variance of the wt), AIC, AICc, and SIC (also called BIC).  Lower values of these statistics are desirable.
+
+One reason that two models may seem to give about the same results is that, with the certain coefficient values, two different models can sometimes be nearly equivalent when they are each converted to an infinite order MA model. 
+
+
+###Chosen Model 1 : arima(x = lPrice, order = c(3, 1, 3), fixed = c(NA, NA, NA, 0, NA, NA), method = "ML")
+
 ```{r }
-chosenModel <- arima(x = lPrice, order = c(3, 1, 3), method = "ML")
-res <- residuals(chosenModel)
+chosenModel1 <- arima(x = lPrice, order = c(3, 1, 3), fixed = c(NA, NA, NA, 0, NA, NA), method = "ML")
+res <- residuals(chosenModel1)
 plot(res)
 qqnorm(res)
 ```
 ```{r }
-normtest(res)
+shapiro.test(res)
 
 ```
+
+The results of the Shapiro-Wilks test indicates the residuals are not Normally distributed. This violates one of the basic assumptions of our Model but we chose to ignore it at this stage.
+
+
+
 ```{r }
 acf(res)
 pacf(res)
-
 ```
-```{r }
-tsdiag(chosenModel)
 
-```
+
+ACF and PACF plots of the residuals appear satisfactory, with no observable significant terms.
+
+
+Formally testing whether we have achieved White Noise or not can be done as follows:
 
 ```{r }
 Box.test(res,lag=20)
 Box.test(res,lag=20,type = "L")
 ```
+
+The high p-values doesn't allow us to reject the Null Hypothesis that there is no dependence between the Residuals.
+
+
+A set of Time Series related plots that can used to summarize our findings:
+
 ```{r }
-acf(res^2)
-pacf(res^2)
+tsdiag(chosenModel1)
 
 ```
+
+
+We can also observe the squares of the Residuals obtained to confirm our findings.
+
+
 ```{r }
+#ACF and PACf of Residual Squares
+acf(res^2)
+pacf(res^2)
+```
+
+
+
+```{r }
+#Box Pierce and Ljung Box Test for Residuals Squares
 Box.test(res^2,lag=20)
 Box.test(res^2,type="L",lag=20)
 ```
-```{r }
-irfplot<-function (irf, s)
-{
- n <- length(irf)
- plot(c(0,n+1), range(c(irf,1)), type = "n",xlab = "Time", ylab = "IRF", main = s)
- lines(c(0,n+1),c(0,0))
- lines(c(0,0),c(0,1))
- for (i in 1:n)
- lines(c(i,i), c(0, irf[i]))
-}
-```
+
+
+We can finally present the Model we have selected as follows:
 
 ```{r }
-chosenModel
+chosenModel1
 ```
 
+We present this Model as the final Model since it passes all the tests we run on it for Residual Diagnostics.
+
+
+
+
+
+> 3. Based on the model selected in question 2, plot the IRF of the weekly log-Price series, and with its help, briefly describe the (univariate) dynamics of the evolution of the USD-INR exchange rates.
+
+Plotting the IRF would require us to convert the Chosen ARIMA model into an MA(infinite) Model.
+
+
 ```{r }
-psi<-ARMAtoMA(ar=c(0.563,-0.8193,0.5861), ma=c(-0.4649,0.8527,-0.5535),lag.max=30)
-psi
+psi<-ARMAtoMA(ar=c(0.1067,-0.8545,0.2149), ma=c(0,0.9140,-0.1447),lag.max=30)
+head(psi)
 ```
+
+#IRF Plot upto 30 Lags for ARMA(3,3)
+
+
 ```{r }
 irfplot(psi,"Exchange Rate IRF")
+```
+
+The IRF Plot gives the impact of a one-time Impulse/Shock of one unit at lag k $X_(t-k)$ on the present value $X_t$ with all other variables dated t or earlier constant.
+
+From the above Plot, we can say that Shocks for lags above 2 time periods do not seem to have a significant effect on the present value of the Exchange Rate prices. For example, a change in Fiscal Policy by the Government will have an impact on the Exchange rate in 2 weeks (under the given model).
+
+
+
+#IRF Plot for 30 lags ARIMA(3,1,3)
+
+```{r}
 irfplot(cumsum(psi)+1,"Log-Exchange Rate IRF")
 ```
-```{r }
-psi100<-ARMAtoMA(ar=c(0.563,-0.8193,0.5861), ma=c(-0.4649,0.8527,-0.5535),lag.max=100)
 
+This gives the IRF plot for the First Order differenced values for the log-Price series. As can be observed, an Impulse at lag k in the past has a persistent effect on the variable $X_t$. The implication of this is that a shock caused due to some policy in the past has a permanent effect on the present Exchange Rates and doesn't converge to 0 but converges to a non-zero Constant.
+
+
+
+
+
+> 4. Based on the model selected in question 2, prepare a table showing the percentage of variance of the (continuously compounded) return series, that is both being incrementally and cumulatively explained by its lagged values, up to 5 lags. Based on these values, comment on the intrinsic predictive power of the model.
+
+Calculating IRF Values upto 100 lags
+
+```{r }
+psi100<-ARMAtoMA(ar=c(0.1067,-0.8545,0.2149), ma=c(0,0.9140,-0.1447),lag.max=100)
+head(psi100)
 ```
-
 ```{r }
-gamma0 <- (1+sum(psi100^2))*7.549e-05
+#Calculation of Gamma 0
+gamma0 <- (1+sum(psi100^2))*chosenModel1$sigma2
 gamma0
 ```
 
 ```{r }
-pc2<-ARMAacf(ar=c(0.563,-0.8193,0.5861), ma=c(-0.4649,0.8527,-0.5535),lag.max=30,pacf=T)^2
+#Partial Correlation Squares
+pc2<-ARMAacf(ar=c(0.1067,-0.8545,0.2149), ma=c(0,0.9140,-0.1447),lag.max=30,pacf=T)^2
 v<-gamma0
 for(i in 2:31) v[i]<-v[i-1]*(1-pc2[i-1])
+head(v)
+
 ```
 
 ```{r }
 ((1-v/gamma0)*100)[-1]
 ```
+
+
 ```{r }
 pc2*100
 ```
@@ -277,20 +491,57 @@ cumsum(pc2*100)
 ```
 
 ```{r }
-((gamma0-7.549e-05)/gamma0)*100
+((gamma0-chosenModel1$sigma2)/gamma0)*100
 
 ```
+
+
+Our Model is able to explain only 2.534% of the variability in the Process.
+
+
+The below table explains the variance unexplained upon addition of each previous lag term (upto 5) in the model:
+
+Lag values | Variance unexplained | Variance Explained 
+------------- | ------------- | -------------
+No past Values | 7.757036e-05 | 0
+$X_(t-1)$ | 7.663234e-05 |  9.380202e-07
+$X_(t-1)$,$X_(t-2)$ | 7.647639e-05    | 1.09397e-06
+$X_(t-1)$,$X_(t-2)$,$X_(t-3)$ | 7.642736e-05    | 1.143e-06
+$X_(t-1)$,$X_(t-2)$,$X_(t-3)$,$X_(t-4)$ | 7.637927e-05    | 1.19109e-06
+$X_(t-1)$,$X_(t-2)$,$X_(t-3)$,$X_(t-4)$,$X_(t-5)$ | 7.631355e-05     |  1.25681e-06
+
+As can be seen, the variance unexplained reduces upon addition of each previous lag term but the reduction in variance unexplained is quite low.
+
+
+Lag value Added | Proportion of Variance explained | Cumulative proportion of Variance Explained 
+------------- | ------------- | -------------
+$X_(t-1)$ | 1.2092479830 | 1.209248
+$X_(t-2)$ | 0.2035057932 | 1.412754
+$X_(t-3)$ | 0.0641168956 | 1.476871
+$X_(t-4)$ | 0.0629136677 | 1.539784
+$X_(t-5)$ | 0.0860517010 | 1.625836
+
+As can be seen from the table, even addition of lag terms upto 5 is able to explain only 1.625% of the overall variability in the process. The 5th lag term is explaining more variance compared to lag 3 and lag 4 terms. 
+This is also evident in the PACF plot.
+
+
+
+> 5. The Price of the USD in the first four weeks of 2018 on 07/01/18, 14/01/18, 21/01/18 and 28/01/18 were observed to be INR 63.61, 63.83, 63.59 and 64.13 respectively. Find the forecasted values and 95% forecast intervals by the model selected in question 2, for these first four weeks of 2018, and comment on the quality of these forecasts.
+
+
 ```{r }
-pr<-predict(chosenModel,n.ahead=4)
+pr<-predict(chosenModel1,n.ahead=4)
 pr
 ```
+
+
 ```{r }
 exp(pr$pred)
-
 ```
+
+
 ```{r }
 exp(pr$pred-2*pr$se)
-
 ```
 
 ```{r }
@@ -298,49 +549,18 @@ exp(pr$pred+2*pr$se)
 
 ```
 
-Real Details:
 
- 63.61, 63.83, 63.59 and 64.13
+Date | Real Values | Forecasting Interval | Predicted Values
+------------- | ------------- | ------------- | -------------
+07-01-18 | 63.61 | [62.176,64.376] | 63.26673
+14-01-18 | 63.83 | [61.655,64.938] | 63.27612
+21-01-18 | 63.59 | [61.238,65.422] | 63.29552
+28-01-18 | 64.13 | [60.868,65.774] | 63.27382
+
+As can be observed from the above table, the Model is able to capture the Exchange Rates within the Forecasting Interval for the next 4 weeks.
+However, as we look further into the future, the Forecasting Interval gets wider.
+
+
+
+
  
-```{r }
-timeSeriesProcess<- function(x,y,z){
-  chosenModel <- arima(lPrice, order = c(x,y,z),method = "L")
-  res<-residuals(chosen_model)
-  plot(res)
-  qqnorm(res)
-  acf(res)
-  pacf(res)
-  tsdiag(chosen_model)
-  normtest(res)
-  Box.test(res,lag=20)
-  Box.test(res,type="L",lag=20)
-  acf(res^2)
-  pacf(res^2)
-  Box.test(res^2,lag=20)
-  Box.test(res^2,type="L",lag=20)
-  arp <- as.numeric(arima(x = lPrice, order = c(x,y,z), method = "ML")$coef[1:x])
-  mrp <- as.numeric(arima(x = lPrice, order = c(x,y,z), method = "ML")$coef[x+1:x+z])
-  psi<-ARMAtoMA(ar=c(arp), ma=c(mrp),  lag.max=30)
-  irfplot(psi,"Return IRF")
-  irfplot(cumsum(psi)+1,"Log-Sensex IRF")
-  psi100<-ARMAtoMA(ar=c(arp), ma=c(mrp),  lag.max=100)
-  gamma0<-(1+sum(psi100^2))*chosenModel$sigma2
-  pc2<-ARMAacf(ar=c(arp), ma=c(mrp),lag.max=30,pacf=T)^2
-  v<-gamma0
-  for(i in 2:31) v[i]<-v[i-1]*(1-pc2[i-1])
-  ((1-v/gamma0)*100)[-1]
-  pc2*100
-  cumsum(pc2*100)
-  pr<-predict(chosen_model,n.ahead=4)
-  exp(pr$pred-2*pr$se)
-  exp(pr$pred+2*pr$se)
-  
-}
-
-```
-
-```{r }
-timeSeriesProcess(0,1,2)
-
-```
-
