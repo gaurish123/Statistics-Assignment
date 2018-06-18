@@ -1,0 +1,566 @@
+---
+title: 'Titanic Dataset Inferences'
+author: "Karthick Raja, Rahul Sathyajit"
+output: html_document
+---
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+#### Extracting the data and Function for the Hypothesis testing
+
+get the data from here:
+https://drive.google.com/file/d/1O3-thqx_6cyWQ6z7VxIsPwxfDfWTtzXZ/view?usp=sharing
+
+``` {r}
+
+#reading the data into a data frame
+data1<-read.csv("C:\\Users\\Lenovo\\Desktop\\stats-assignment 2\\titanic.csv") #change the path here
+#Test to be used
+nptest<-function(x)
+{
+  Chisq<-chisq.test(x)
+  Fis<-fisher.test(x)
+  df<-data.frame(Method=c(Chisq$method, Fis$method),
+                 P.Value=c(Chisq$p.value, Fis$p.value))
+  df
+}
+
+sigtest<-function(x,y)
+{
+  kst<-ks.test(x,y)
+  wil<-wilcox.test(x,y)
+  df<-data.frame(Method=c(kst$method, wil$method),
+                 P.Value=c(kst$p.value, wil$p.value))
+  df
+}
+
+normtest<-function(x)
+{
+  library(nortest)
+  s<-shapiro.test(x)
+  ad<-ad.test(x)
+  cvm<-cvm.test(x)
+  ll<-lillie.test(x)
+  sf<-sf.test(x)
+  df<-data.frame(Method=c(s$method, ad$method, cvm$method, ll$method, sf$method),
+                 P.Value=c(s$p.value, ad$p.value, cvm$p.value, ll$p.value, sf$p.value))
+  df
+}
+``` 
+
+
+####***1.Is there a significant difference in Age distribution between those who survived and those who did not?***
+
+####Data Analysis
+
+``` {r}
+
+#having a table for age and survival
+asu <- data.frame(data1$Age,data1$Survived)
+#Dividing Survived and Not Survived
+asu0<-subset(asu,asu$data1.Survived==0)
+asu1<-subset(asu,asu$data1.Survived==1)
+```
+
+####Plots and Graphs
+
+######Boxplot
+
+``` {r}
+boxplot(asu0$data1.Age,asu1$data1.Age,main='Not - Survived                       Survived')
+```
+
+######Histogram
+``` {r}
+hist(asu0$data1.Age,main = 'histogram of Age - Not Survived',xlab = 'Age')
+
+```
+
+``` {r}
+hist(asu1$data1.Age,main = 'histogram of Age - Survived',xlab = 'Age')
+
+```
+
+######QQNorm - Plot
+``` {r}
+qqnorm(asu0$data1.Age,main = "QQ Normal plot for Age - Not Survived")
+
+```
+``` {r}
+qqnorm(asu1$data1.Age,main = "QQ Normal plot for Age - Survived")
+```
+
+######Conducting Normality test for both the samples
+
+``` {r}
+normtest(asu0$data1.Age)
+```
+
+```{R}
+normtest(asu1$data1.Age)
+```
+
+The P-Value of the Normality tests are less than 0.05 , strong evidence against null hypothesis ( The data follows normal distribution)
+
+Both the data for survived and not survived people did not follow normal distribution
+
+####Hypothesis Testing
+
+***Null Hypothesis***: There is a no difference in Age distribution between those who survived and those who did not.
+
+***Alternate Hypothesis***: There is a difference in Age Distribution between those who survived and those who did not
+
+```{R}
+#Test
+wilcox.test(asu0$data1.Age,asu1$data1.Age)
+```
+
+>Results
+
+The P-Value of the Wilcoxon rank sum test is 0.192. The is no strong evidence against Null hypothesis.
+
+There is a **No significant difference ** between the age of the people who have survived and who have not. 
+
+***
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+####***2.Answer the same as above after controlling for Gender.***
+
+####Data Analysis
+
+```{R}
+#Controlling for gender in the age table
+gsu <- data.frame(data1$Gender,data1$Age,data1$Survived)
+#Dividing Survived and Not Survived
+gsu0<-subset(gsu,gsu$data1.Survived==0)
+gsu1<-subset(gsu,gsu$data1.Survived==1)
+```
+
+####Graphs and Plots
+
+######Barplot
+
+```{R}
+barplot(table(gsu0$data1.Gender),main='Barplot for Not Survived people',ylab='Number of people')
+```
+
+
+```{R}
+barplot(table(gsu1$data1.Gender),main = 'Barplot for Survived People',ylab = 'Number of People')
+```
+
+```{R}
+
+#Dividing the table for gender
+msu0<-subset(gsu0,gsu0$data1.Gender=='male')
+fsu0<-subset(gsu0,gsu0$data1.Gender=='female')
+msu1<-subset(gsu1,gsu1$data1.Gender=='male')
+fsu1<-subset(gsu1,gsu1$data1.Gender=='female')
+```
+
+######Box Plot
+```{R}
+boxplot(msu0$data1.Age,msu1$data1.Age,fsu0$data1.Age,fsu1$data1.Age,main='Male_not_survived     Male_Survived     Female_Not_Survived     Female_Survived',cex.main=0.9)
+```
+
+```{R out.extra='style="float:left"'}
+
+hist(msu0$data1.Age,main = 'histogram of Age - Not Survived - Male',xlab = 'Age')
+
+```
+```{R}
+
+hist(msu1$data1.Age,main = 'histogram of Age -  Survived - Male',xlab = 'Age')
+```
+
+```{R}
+hist(fsu0$data1.Age,main = 'histogram of Age - Not Survived - Female',xlab = 'Age')
+```
+
+```{R}
+hist(fsu1$data1.Age,main = 'histogram of Age - Survived - Female',xlab = 'Age')
+```
+
+######QQNorm Plot
+```{R}
+qqnorm(msu0$data1.Age,main = "QQ Normal plot for Age - Not Survived - Male")
+
+```
+
+```{R}
+qqnorm(msu1$data1.Age,main = "QQ Normal plot for Age -  Survived - Male")
+```
+
+```{R}
+qqnorm(fsu0$data1.Age,main = "QQ Normal plot for Age - Not Survived - Female")
+```
+
+```{R}
+qqnorm(fsu1$data1.Age,main = "QQ Normal plot for Age -  Survived - Female")
+```
+Normality test for both the samples
+
+```{R}
+normtest(msu0$data1.Age)
+```
+
+```{R}
+normtest(msu1$data1.Age)
+```
+
+```{R}
+normtest(fsu0$data1.Age)
+```
+
+```{R}
+normtest(fsu1$data1.Age)
+```
+
+######Normality Test Results
+
+Female Passengers who did not survive have a normally distributed data. 
+
+All the other categories like Male survived, Male not survived, Female survived data are not normal.
+
+####Hypothesis Testing - For Male
+
+***NUll Hypothesis: *** There is no signigicant difference in Age distribution between those who survived and those who did not for male.
+
+***Alternative Hypothesis: ***  There is signigicant difference in Age distribution between those who survived and those who did not for male.
+
+```{R}
+#Tests
+sigtest(msu0$data1.Age,msu1$data1.Age)
+```
+
+>Results
+
+The P-Value of both the two-sample KS test and Wilcoxon rank sum test were found to be less than 0.05.
+
+There is a strong evidance against the Null Hypothesis.
+
+There is signigicant difference in Age distribution between those who survived and those who did not for male.
+
+####Hypothesis Testing - For Female
+
+***NUll Hypothesis: *** There is no signigicant difference in Age distribution between those who survived and those who did not for Female
+
+***Alternative Hypothesis: ***  There is signigicant difference in Age distribution between those who survived and those who did not for Female
+
+```{R}
+#Tests
+sigtest(fsu0$data1.Age,fsu1$data1.Age)
+```
+
+>Results
+
+The P-Value of both the two-sample KS test and Wilcoxon rank sum test were found to be less than 0.05.
+
+There is a strong evidance against the Null Hypothesis.
+
+There is signigicant difference in Age distribution between those who survived and those who did not for Female.
+
+***
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+####***3. Remark on how Age affected the Survival Probability of a passenger on board the Titanic, based on consolidations of your findings in 1 and 2 above***
+   
+####Data Analysis
+
+```{R}
+#copy to staging table
+asuc1<-asu1
+asuc0<-asu0
+asuc0<-cut(asuc0$data1.Age,c(0,18,30,55,150))
+asuc1<-cut(asuc1$data1.Age,c(0,18,30,55,150))
+
+x<-table(asuc1)
+y<-table(asuc0)
+
+x<-data.frame(t(t(table(asuc1))))
+y<-data.frame(t(t(table(asuc0))))
+x<-x[-2]
+y<-y[-2]
+#combining tables
+AgeTable<-cbind(x,y$Freq)
+
+#renaming columns
+names(AgeTable)[names(AgeTable) == "asuc1"] <- "def"
+names(AgeTable)[names(AgeTable) == "Freq"] <- "Survived"
+names(AgeTable)[names(AgeTable) == "y$Freq"] <- "Un-Survived"
+rownames(AgeTable)<-c("Young","Young Adult","Adult","Old")
+AgeTable
+```
+
+####Plots and Graphs
+
+######Barplots
+
+```{R}
+#BarPlot
+
+temp<-AgeTable$Survived
+names(temp)<-c("young","young adult","Adult","old")
+barplot(temp,main = 'Survived')
+
+```
+```{r}
+boxplot(temp, main='Boxplot for Survived')
+```
+
+```{r}
+temp<-AgeTable$`Un-Survived`
+names(temp)<-c("young","young adult","Adult","old")
+barplot(temp,main='Un-Survived')
+```
+```{r}
+boxplot(temp, main='Boxplot for Not-Survived')
+```
+
+####Hypothesis Testing
+
+***Null Hypothesis:*** The Survival Probablity is not affected by the Age of the passanger
+The survival probability is homogenous across all the Age buckets
+
+***Alternate Hypothesis:*** The Survival Probability is affected by the Age of the Passanger
+The Survival Probability is Not Homogenous across all the Age buckets
+
+```{r}
+AgeTable<-AgeTable[,-1]
+chisq.test(AgeTable)
+```
+
+>Results
+
+The p value of the chi-quare test of Homogeneity is 2.2e-16, which is less than 0.05.
+
+There is a strong evidence against the null hypothesis
+
+The Survival Probability is affected by the Age Distribution.
+
+***
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+####***4. Is there a significant difference in Survival Probability between the two genders?***
+
+####Data Analysis
+
+#####Gender based Survival Table
+
+```{r}
+#copy to staging table
+gen<-data.frame(data1$Gender,data1$Survived)
+gen0<-subset(gen,gen$data1.Survived==0)
+gen1<-subset(gen,gen$data1.Survived==1)
+
+gen0<-data.frame(t(t(table(gen0$data1.Gender))))
+
+gen1<-data.frame(t(t(table(gen1$data1.Gender))))
+
+gen0<-gen0[-2]
+gen0<-gen0[-1]
+gen1<-gen1[-2]
+gen1<-gen1[-1]
+#Combining Table
+GenderTable<-cbind(gen0,gen1$Freq)
+rownames(GenderTable)<-c("Female","Male")
+colnames(GenderTable)<-c("Survived","Not-Survived")
+
+GenderTable
+```
+
+```{r}
+temp<-GenderTable$Survived
+names(temp)<-c("Female","Male")
+barplot(temp,main = "Survived")
+```
+
+```{r}
+temp<-GenderTable$`Not-Survived`
+names(temp)<-c("Female","Male")
+barplot(temp,main = "Not-Survived")
+```
+
+####Hypothesis Testing
+
+***Null Hypothesis:*** There is no difference in the survival probability between the two genders
+
+***Alternative Hypothesis:*** There is a difference in the survival probability between the two genders
+
+```{r}
+nptest(GenderTable)
+```
+>Results
+
+Both the Chi-Sq test and Fisher test are giving P-Value less than 0.05.
+
+There is a strong evidence against Null Hypothesis
+
+The Survival Rate is dependent on the Gender based on chi square test for independence and Fisher's Exact 
+
+***
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+####***5. Is there a significant difference in Survival Probability between the three passenger classes?***
+  
+####Data Analysis
+
+#####Passanger Class Table
+```{r}
+
+temp<-subset(data1,data1$Survived==0)
+temp<-subset(temp,temp$PClass=='1st')
+class1n<-data.frame(temp$PClass,temp$Survived)
+
+temp<-subset(data1,data1$Survived==1)
+temp<-subset(temp,temp$PClass=='1st')
+class1s<-data.frame(temp$PClass,temp$Survived)
+
+temp<-subset(data1,data1$Survived==0)
+temp<-subset(temp,temp$PClass=='2nd')
+class2n<-data.frame(temp$PClass,temp$Survived)
+
+temp<-subset(data1,data1$Survived==1)
+temp<-subset(temp,temp$PClass=='2nd')
+class2s<-data.frame(temp$PClass,temp$Survived)
+
+temp<-subset(data1,data1$Survived==0)
+temp<-subset(temp,temp$PClass=='3rd')
+class3n<-data.frame(temp$PClass,temp$Survived)
+
+temp<-subset(data1,data1$Survived==1)
+temp<-subset(temp,temp$PClass=='3rd')
+class3s<-data.frame(temp$PClass,temp$Survived)
+
+class1s<-table(class1s)
+class1n<-table(class1n)
+class2s<-table(class2s)
+class2n<-table(class2n)
+class3n<-table(class3n)
+class3s<-table(class3s)
+
+ClassTable<-matrix(c(class1s[-2:-3],class1n[-2:-3],class2s[2],class2n[2],class3s[3],class3n[3]),ncol=2,byrow=TRUE)
+rownames(ClassTable)<-c("Class-1","Class-2","Class-3")
+colnames(ClassTable)<-c("Survived","Un-Survived")
+ClassTable
+```
+####Hypothesis Testing
+
+***Null Hypothesis:*** The Survival probability is same across all the passanger class
+
+***Alternate Hypothesis:*** The Survival probability is not same across all the passanger class
+
+
+```{r}
+nptest(ClassTable)
+```
+
+>Results
+The P-Value given by both Chi-Sq test and Fisher's Exact test are less than 0.05. 
+
+There is a strong evidence against Null hypothesis.
+
+The survival probability is not distributed evenly across the P-Class.
+
+***
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+####***6. Is there a significant difference in Survival Probability between the two genders even after taking the effect of Passenger Class into Account?***
+
+####Data Analysis
+   
+```{r}
+#The Gender Table Generator for Different classes
+gtrans<-function(x)
+{
+gen<-data.frame(q6$Gender,q6$Survived)
+gen0<-subset(gen,gen$q6.Survived==0)
+gen1<-subset(gen,gen$q6.Survived==1)
+
+gen0<-data.frame(t(t(table(gen0$q6.Gender))))
+
+gen1<-data.frame(t(t(table(gen1$q6.Gender))))
+
+gen0<-gen0[-2]
+gen0<-gen0[-1]
+gen1<-gen1[-2]
+gen1<-gen1[-1]
+#Combining Table
+GenderTable<-cbind(gen0,gen1$Freq)
+rownames(GenderTable)<-c("Female","Male")
+colnames(GenderTable)<-c("Survived","Not-Survived")
+
+return(GenderTable)
+}
+```
+
+####Table for Class 1
+```{r}
+q6<-subset(data1,data1$PClass=='1st')
+temp<-gtrans(q6)
+temp
+```
+####Hypothesis Testing for Class-1 Passengers
+
+***Null Hypothesis:*** There is no difference between the survival proportion between the male and female passanger of class 1
+
+***Alternate Hypothesis:*** There is a significant difference between the survival proportion between the male and female passanger of class 1
+
+```{r}
+nptest(temp)
+```
+>Results
+
+The P-Value of both the Chi-Sq test and Fisher Exact Test is less than 0.05
+
+There is a strong evidence against Null Hypothesis
+
+Theere is a significant difference between the Survival Probablity of Male and Female of the class-1 Passangers. 
+
+####Table for Class 2
+```{r}
+q6<-subset(data1,data1$PClass=='2nd')
+temp<-gtrans(q6)
+temp
+```
+####Hypothesis Testing for Class-2 Passengers
+
+***Null Hypothesis:*** There is no difference between the survival proportion between the male and female passanger of class 2
+
+***Alternate Hypothesis:*** There is a significant difference between the survival proportion between the male and female passanger of class 2
+
+```{r}
+nptest(temp)
+```
+>Results
+
+The P-Value of both the Chi-Sq test and Fisher Exact Test is less than 0.05
+
+There is a strong evidence against Null Hypothesis
+
+Theere is a significant difference between the Survival Probablity of Male and Female of the class-2 Passangers.
+
+####Table for Class-3
+
+```{r}
+q6<-subset(data1,data1$PClass=='3rd')
+temp<-gtrans(q6)
+temp
+```
+####Hypothesis Testing for Class-3 Passengers
+
+***Null Hypothesis:*** There is no difference between the survival proportion between the male and female passanger of class 3
+
+***Alternate Hypothesis:*** There is a significant difference between the survival proportion between the male and female passanger of class 3
+
+```{r}
+chisq.test(temp)
+```
+
+>Results
+
+The P-Value of both the Chi-Sq test and Fisher Exact Test is less than 0.05
+
+There is a strong evidence against Null Hypothesis
+
+There is a significant difference between the Survival Probablity of Male and Female of the class-3 Passangers.
