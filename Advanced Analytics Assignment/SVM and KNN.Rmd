@@ -1,0 +1,132 @@
+---
+title: "SVM and KNN"
+author: "Karthick"
+date: "31 March 2018"
+output: html_document
+---
+
+####7.1 One Hot Encoding
+
+The reason for running the SVM and KNN together is that both the algorithms can't tolerate the presence of a categorical variables in the predictors. It is necessary for us to convert ( one hot encode ) the categorical variables into numerical variables before sending them to train.
+
+
+***Encoding Process***
+
+1. Label the numerical data with different numbers
+
+2. create a separate column for each variable containing either 0 or 1, indicating the presence or absence of the variable
+
+3. columns are created such the variable having 3 levels are represented by 2 columns with the following combinations 1: (0,0) level 1 (1,0) level 2 (0,1) level 2
+
+```{r }
+# Importing the dataset
+
+# Importing the dataset
+dfFinal <- read.csv("dfFinal.csv")
+dfFinal$totDep <- as.factor(dfFinal$totDep)
+dfFinal$PHON <- as.factor(dfFinal$PHON)
+dfFinal$bad <- as.factor(dfFinal$bad)
+
+dataset = dfFinal
+
+
+# Encoding categorical data
+for(unique_value in unique(dataset$totDep)){
+  
+  
+  dataset[paste("totDep", unique_value, sep = ".")] <- ifelse(dataset$totDep == unique_value, 1, 0)
+}
+dataset$totDep <- NULL
+dataset$totDep.5 <-NULL
+
+dataset$RES = factor(dataset$RES,
+                     levels = c('F', 'N', 'O','P','U'),
+                     labels = c(1, 2, 3,4,5))
+
+for(unique_value in unique(dataset$RES)){
+  
+  
+  dataset[paste("RES", unique_value, sep = ".")] <- ifelse(dataset$RES == unique_value, 1, 0)
+}
+dataset$RES <- NULL
+dataset$RES.5 <-NULL
+
+
+dataset$AES = factor(dataset$AES,
+                     levels = c('B', 'E', 'M', 'N', 'P', 'R', 'T', 'U' ,'V', 'W' ,'Z'),
+                     labels = c(1,2,3,4,5,6,7,8,9,10,11))
+
+for(unique_value in unique(dataset$AES)){
+  
+  
+  dataset[paste("AES", unique_value, sep = ".")] <- ifelse(dataset$AES == unique_value, 1, 0)
+}
+dataset$AES <- NULL
+dataset$AES.11 <-NULL
+
+dataset$PHON = factor(dataset$PHON,
+                      levels = c('0','1'),
+                      labels = c(1,2))
+
+for(unique_value in unique(dataset$PHON)){
+  
+  
+  dataset[paste("PHON", unique_value, sep = ".")] <- ifelse(dataset$PHON == unique_value, 1, 0)
+}
+dataset$PHON <- NULL
+dataset$PHON.2 <-NULL
+
+
+
+```
+
+
+####7.2 SVM model
+
+```{r }
+
+# Splitting the dataset into the Training set and Test set
+# install.packages('caTools')
+library(caTools)
+
+split = sample.split(dataset$bad, SplitRatio = 0.75)
+training_set = subset(dataset, split == TRUE)
+test_set = subset(dataset, split == FALSE)
+
+# Fitting Kernel SVM to the Training set
+# install.packages('e1071')
+library(e1071)
+classifierSVM = svm(formula = bad ~.,
+                 data = training_set,
+                 cost = 10,
+                 type = 'C-classification',
+                 kernel = 'sigmoid')
+
+# Predicting the Test set results
+y_pred_svm = predict(classifierSVM, newdata = test_set[-4])
+
+# Making the Confusion Matrix
+cm = table(test_set[, 4], y_pred_svm)
+cm
+
+
+```
+The model is trained with the sigmoid function., a special case of logistic function.
+
+```{r }
+accuracy = (cm[1,1] + cm[2,2]) / (cm[1,1] + cm[2,2] + cm[1,2] + cm[2,1])
+sensitivity=(cm[2,2]/(cm[2,2]+cm[2,1]))
+specificity=(cm[1,1]/(cm[1,1]+cm[1,2]))
+
+print("the accuracy of the model is ")
+print(accuracy)
+
+print("the sensitivity of the model is ")
+print(sensitivity)
+
+print("the specificity of the model is ")
+print(specificity)
+
+```
+
+####7.3 KNN

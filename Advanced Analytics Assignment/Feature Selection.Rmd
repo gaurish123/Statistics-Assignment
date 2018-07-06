@@ -1,0 +1,161 @@
+---
+title: "Feature Selection"
+author: "Karthick"
+date: "31 March 2018"
+output: html_document
+---
+
+####3. Feature Selection
+
+#####3.1 Performance Measurement
+
+The performance of the model can be measured using 
+
+1) P- Value Significance
+
+2) AIC - Akaike Information Criteria
+
+3) AUC - Area Under the curvve
+
+4) Accuracy - From confusion Matrix
+
+5) sensitivity - From Confusion Matrix
+
+6) Specificity - From Confusion matrix
+
+7) Gini Index - Random Forest 
+
+#####3.2 Feature Selection using Backward Elimination
+
+In backward elimination, we start with all the features and removes the least significant feature at each iteration which improves the performance of the model. We repeat this until no improvement is observed on removal of features.
+
+```{r }
+dfFinal <- read.csv("dfFinal.csv")
+dfFinal$totDep <- as.factor(dfFinal$totDep)
+dfFinal$PHON <- as.factor(dfFinal$PHON)
+dfFinal$bad <- as.factor(dfFinal$bad)
+
+library(caTools)
+set.seed(123)
+split = sample.split(dfFinal$bad, SplitRatio = 0.75)
+training_set = subset(dfFinal, split == TRUE)
+test_set = subset(dfFinal, split == FALSE)
+
+classifierFS= glm(formula = bad ~ Age+RES+netFamIncome,
+                 family = binomial,
+                 data = training_set)
+summary(classifierFS)
+
+
+prob_pred = predict(classifierFS, type = 'response', newdata = test_set[-8])
+yPredFS = ifelse(prob_pred > 0.5, 1,0)
+
+cm = table(test_set[, 8],yPredFS)
+
+accuracy = (cm[1,1] + cm[2,2]) / (cm[1,1] + cm[2,2] + cm[1,2] + cm[2,1])
+sensitivity=(cm[2,2]/(cm[2,2]+cm[2,1]))
+specificity=(cm[1,1]/(cm[1,1]+cm[1,2]))
+
+library(pROC)
+plot.roc(test_set[,8],prob_pred,print.auc=TRUE)
+
+results <- cbind(c("Reduced",as.numeric(AIC(classifierFS)),auc(test_set[, 8], yPredFS ),sensitivity,specificity,accuracy))
+
+
+
+```
+
+The above procedure is started with model having all the values and we will start removing each term in the model which are not significant and till we reach a model which has all significant terms. We study and remove the variables based on other performance measures als0.
+
+
+
+ Variable     | Model 1   |  $Model 2   |  Model 3   |
+------------- | ----------|-------------|------------|
+Type          | Full Model|$Reduced     |Reduced     |
+NTerms        | 8         |$3           |2           |
+AIC           | 1034.97   |$1017.73     |1017.12     |    
+AUC           | 0.5687    |$0.5687      |0.5687      |
+Sensitivity   | 0.2098    |$0.1728      |0.1728      |
+Specificity   | 0.9469    |$0.9646      |0.9646      |
+Accuracy      | 0.7524    |$0.7557      |0.7557      |
+
+Variable Importance information in the order of preference according to the Glm binomial model:
+
+Age
+
+netFamIncome
+
+RES-N
+
+RES-O ( Insignificant )
+
+
+#####3.3 Feature importance using Random Forest Classifier
+
+The importance of features can be estimated from data by building a model. Some methods like decision trees have a built in mechanism to report on variable importance. For other algorithms, the importance can be estimated using a ROC curve analysis conducted for each attribute.
+
+The Decision trees are formed based on this Important features. These features are present at the Top of the decision tree and contribute to more information gain than other variables.
+
+Note : In Random Forest the choice of the variables in each node are chosen at random, hence for every interation ., the position of importance of variables might change slightly
+
+
+```{r }
+library(randomForest)
+library(caret)
+classificationRFFeature <- randomForest(bad~., data= dfFinal, ntree = 500)
+varImp(classificationRFFeature)
+varImpPlot(classificationRFFeature)
+```
+
+These scores which are denoted as 'Mean Decrease Gini' by the importance measure represents how much each feature contributes to the homogeneity in the data.
+
+Each time a feature is used to split data at a node, the Gini index is calculated at the root node and at both the leaves. The Gini index represents the homogeneity and is 0 for completely homogeneous data and 1 for completely heterogeneous data.
+
+The difference in the Gini index of the child nodes and the splitting root node is calculated for the feature and normalized.
+
+Here, the nodes are also said to result in 'purity' of the data which means that the data is more easily classified. If the purity is high, the mean decrease in Gini index is also high.
+
+Hence, the mean decrease in Gini index is highest for the most important feature.
+
+Example calculation: Considering the node PHON as split
+
+Target variable Values :
+
+0 : 26.34 percent
+1 : 73.63 percent
+
+Variable PHON :
+
+0 : 9.63 percent
+1 : 90.37 percent
+
+table(df_PHON,df_BAD)
+   
+ph  |  0  | 1
+----|-----|-------
+  0 | 80  |38
+  1 |822  |285
+  
+gini index for the node will be
+
+1- (902/1225)^2 - (323/1225)^2
+
+0.3883
+
+GINI (s,t)       = GINI (t) - PL GINI (tL) - PR GINI (tR)
+
+gini(tl) gini of the left node after split = 1 - (80/118)^2 - (38/118)^2 = 0.4366
+
+gini(tr) gini of the right node after split = 1 - (822/1107)^2  - (285/1107)^2 = 0.3823
+
+GINI (t) index node proportion : 0.2637
+
+PL   : Proportion of observation in Left Node after split, s
+
+PR   : Proportion of observation in Right Node after split, s
+
+GINI index of the split : 0.7363 - (118/1225)x0.4366 - (1107/1225)x0.3823 : **0.3487**
+
+Similarly, we need to find GINI index value for all the split points and select the best split for a variable. Also the best split points are calculated for all the variables. The best variable and the split is selected to split the input node.
+
+

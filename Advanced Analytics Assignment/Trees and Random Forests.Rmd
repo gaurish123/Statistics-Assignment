@@ -1,0 +1,227 @@
+---
+title: "Trees and Random Forest"
+author: "Karthick"
+date: "31 March 2018"
+output: html_document
+---
+
+###6.Trees
+
+####6.1 Tree Model - Algorithm
+
+Decision Tree are Non-Parametric Models used for classification and regression problems ( including Non linear problems ).
+
+1. Use recursive binary splitting to grow a large tree on the training data, stopping only when eacch terminal node has fewer than some minimum number of observations.
+
+2.Apply cost complexity pruning to the large tree in order to obtain a sequence of best subtrees, as a function of alpha.
+
+3.Use K-fold cross-validation to choose ??. That is, divide the training observations into K folds. For each k = 1,...,K:
+
+      (a) Repeat Steps 1 and 2 on all but the kth fold of the training data.
+      (b) Evaluate the accuracy on the data in the left-out kth fold, as a function of                     alpha.Average the results for each value of ??, and pick ?? to minimize the average error.
+      
+4. Return the subtree from Step 2 that corresponds to the chosen value of alpha.
+
+
+Trees can handle qualitative predictors without the need for dummy variables.  
+
+Trees generally have large variance, a small change in the data can cause a large change in the final model .
+
+####6.2 The Tree Model
+
+```{r }
+# Importing the dataset
+dfFinal <- read.csv("dfFinal.csv")
+dfFinal$totDep <- as.factor(dfFinal$totDep)
+dfFinal$PHON <- as.factor(dfFinal$PHON)
+dfFinal$bad <- as.factor(dfFinal$bad)
+
+dataset = dfFinal
+
+
+# Splitting the dataset into the Training set and Test set
+# install.packages('caTools')
+library(caTools)
+set.seed(123)
+split = sample.split(dataset$bad, SplitRatio = 0.75)
+training_set = subset(dataset, split == TRUE)
+test_set = subset(dataset, split == FALSE)
+
+# Fitting Kernel SVM to the Training set
+library(rpart)
+classifierTree = rpart(formula = bad ~ .,
+                       data = training_set, control = rpart.control(minsplit = 10,cp = 0.02165))
+
+# Predicting the Test set results
+y_pred_tree = predict(classifierTree, newdata = test_set[-8], type = 'class')
+
+# Making the Confusion Matrix
+cm = table(test_set[, 8], y_pred_tree)
+
+```
+
+***The Model***
+
+```{r }
+rpart.plot::rpart.plot(classifierTree)
+```
+
+#####6.3 Model Explanation and Model Parameters
+
+It is one of the simplest tree, using NetFamIncome, AES and RES as the variables having more importance based on the GINI index.
+
+
+1. We divide the predictor space-that is, the set of possible values for
+netIncome, RES, AES -into J distinct and non-overlapping regions,
+R1, R2,...,RJ .
+2. For every observation that falls into the region Rj , we make the same
+prediction, which is simply the mean of the response values for the
+training observations in Rj .
+
+
+```{r }
+printcp(classifierTree)
+plotcp(classifierTree)
+```
+
+Cp <- complexity Parameter
+
+For regression models  the scaled cp has a very direct interpretation: if any split does not increase the overall R2 of the model by at least cp then that split is decreed to be, a priori, not worth pursuing. The program does not split said branch any further, and saves considerable computational effort.
+
+based on Trial and error the Cp is found to be 0.0216 for this model.
+
+```{r }
+accuracy = (cm[1,1] + cm[2,2]) / (cm[1,1] + cm[2,2] + cm[1,2] + cm[2,1])
+sensitivity=(cm[2,2]/(cm[2,2]+cm[2,1]))
+specificity=(cm[1,1]/(cm[1,1]+cm[1,2]))
+
+print("the accuracy of the model is ")
+print(accuracy)
+
+print("the sensitivity of the model is ")
+print(sensitivity)
+
+print("the specificity of the model is ")
+print(specificity)
+```
+
+The sensitivity of the model is very low.
+
+#####6.4 Random Forest
+
+Random Forest are combinations of decorrelated trees.
+
+Various decision trees are built on the bootstrapped ( repeated sampling ) data.
+
+A random of M predictors are chosen among the P predictors ( ususally m =sqrt(p)) and these predictors are considered for splitting the tree further.
+
+Note : These M predictors may not have a important predictor.
+
+This helps to reduce the variance in the model as most of the trees will have important variables at the top and other trees have highly correlated 2nd most important variables in top and it goes on. 
+
+Bagging( Bootstrapping ) helps to reduce bias to an certain extent
+
+Randomly choosing parameter for these trees help to reduce the variance between the models. 
+
+(Decorrelationg the trees) by forcing the split to happen based on different variables and reducing the error of the most common trees.
+
+#####6.5 Random Forest Model
+
+```{r }
+# Importing the dataset
+dataset = dfFinal
+
+
+# Splitting the dataset into the Training set and Test set
+# install.packages('caTools')
+library(caTools)
+set.seed(123)
+split = sample.split(dataset$bad, SplitRatio = 0.75)
+training_set = subset(dataset, split == TRUE)
+test_set = subset(dataset, split == FALSE)
+
+library(randomForest)
+set.seed(123)
+classifier = randomForest(x = training_set[-8],
+                          y = training_set$bad,
+                          ntree = 500,
+                          mtry = 2)
+
+# Predicting the Test set results
+y_pred = predict(classifier, newdata = test_set[-8])
+y_pred_rf <- y_pred
+# Making the Confusion Matrix
+cm = table(test_set[, 8], y_pred)
+
+accuracy = (cm[1,1] + cm[2,2]) / (cm[1,1] + cm[2,2] + cm[1,2] + cm[2,1])
+sensitivity=(cm[2,2]/(cm[2,2]+cm[2,1]))
+specificity=(cm[1,1]/(cm[1,1]+cm[1,2]))
+
+print("the accuracy of the model is ")
+print(accuracy)
+
+print("the sensitivity of the model is ")
+print(sensitivity)
+
+print("the specificity of the model is ")
+print(specificity)
+
+```
+***Visualising the Tree***
+
+```{r }
+plot(classifier)
+```
+
+The red is the error rate for Bad credit = 0.
+
+The Green is the error rate for BAD credit = 1.
+
+The black line is the out of the bag error.
+
+***Out of the bag Error***
+
+Every time each boostrapped (bagged) tree makes use of the 67% percent of the observation in the data. The best way to estimate the test error is to use the left out data ( also known as out of bag data) is to test the trained model in the out of the bag data.
+
+***Parameter Tuning***
+
+```{r, echo=FALSE}
+library(caret)
+classifierRFP = train( form = bad ~ ., data = training_set ,method = 'rf' )
+classifierRFP
+```
+Number of variables randomly sampled as candidates at each split.
+Hence the original model has been chosen with mtry = 2 as control for random Forest.
+
+####6.6 10 -Fold Cross Validation
+
+```{r }
+library(caret)
+
+folds = createFolds(training_set$bad, k = 10)
+cv = lapply(folds, function(x) {
+  training_fold = training_set[-x, ]
+  test_fold = training_set[x, ]
+  set.seed(123)
+  classifier = randomForest(x = training_fold[-8],
+                            y = training_fold$bad,
+                            ntree = 500)
+  
+  # Predicting the Test set results
+  y_pred = predict(classifier, newdata = test_fold[-8])
+  
+  # Making the Confusion Matrix
+  cm = table(test_fold[, 8], y_pred)
+  accuracy = (cm[1,1] + cm[2,2]) / (cm[1,1] + cm[2,2] + cm[1,2] + cm[2,1])
+  return(accuracy)
+})
+accuracyTree = mean(as.numeric(cv))
+print("The accuracy of the model is")
+accuracyTree
+
+```
+
+####6.7 End Note
+
+>Both the tree and Random Forest seem to be performing lesser if not equal to that of the logistic regression which has been confirmed by several iterations.
+

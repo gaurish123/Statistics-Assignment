@@ -1,0 +1,320 @@
+---
+title: "Advanced Analytics Assignment"
+author: "Karthick"
+date: "26 March 2018"
+output: html_document
+---
+
+###1.Data Analysis
+
+#####Adding the data to the Environment
+
+```{r attachData}
+
+df = read.csv ("C:\\Users\\Lenovo\\Desktop\\public.csv",header = TRUE)
+head(df)
+```
+
+#####Structure of the dataset:
+
+```{r structureOfTheData}
+str(df)
+```
+
+#####Checking for NA Value
+
+No NA values were found
+
+```{r checkingNA}
+na_count <-sapply(df, function(y) sum(length(which(is.na(y)))))
+na_count
+```
+
+#####Basic Tests for Understanding Variable behaviour and relation with the response
+
+1. For Qualitative Variables
+
+Test the Hypothesis whether there is a difference in mean of the qualitative variable for good vs bad credit score at 0.05 significance level
+
+2. For Categorical Variables
+
+Test the Hypothesis whether the credit score is independent of their levels of different categorical variables at .05 significance level.
+
+
+#####User Defined Functions:
+
+```{r someUsefulFunctions}
+boxPlotTest <- function(x,y){
+  boxplot(x~y)
+  pvalue <-t.test(x[y == 0], x[y == 1])$p.value
+  print("The p-value for the t-test is ")
+  print(pvalue)
+}
+
+chiTablePlot <- function(x,y){
+  tbl = table(x, y) 
+  print(tbl)
+  chisq.test(tbl) 
+}
+```
+
+
+Sample Comparison of Quantitative variable : DOUTM
+
+```{r checkingInfluence}
+boxPlotTest(df$DOUTM,df$BAD)
+```
+Sample comparison for the Categorical value : NKID
+
+```{r }
+chiTablePlot(df$NKID,df$BAD)
+```
+
+#####Table having significance Value
+
+ Variable     | P-Value
+------------- | -------------
+DOB           | < 0.05
+NKID          | 0.5033 
+DEP           | 0.5892
+PHON          | 0.1604 
+SINC          | 0.0119 
+AES           | < 0.05 
+DAINC         | < 0.05 
+RES           | 0.0028 
+DHVAL         | 0.0953 
+DMORT         | 0.1368 
+DOUTM         | 0.0202 
+DOUTL         | 0.4832 
+DOUTHP        | 0.0004 
+DOUTCC        | < 0.05 
+
+The variables with p-value < 0.05 are expected to have some effect on the credit score:
+
+DOB (Age)
+
+Income of individual and spouse
+
+Debts
+
+AES
+
+RES
+
+
+#####Some more visualisation to understand the correlations
+
+The Value of the home (DHVAL) and Mortgage (DMORT) seem to have positive correlation
+
+For Good credit holders the Individual and Spouse income seems to be not correlated but for BAD credit holders the individual income decreases with Spouse Income.
+
+```{r, message=FALSE, warning=FALSE}
+library(car)
+scatterplot.matrix(~SINC+DAINC|BAD, data = df)
+```
+
+```{r, warning=FALSE}
+scatterplot.matrix(~DHVAL+DMORT|BAD, data = df)
+```
+
+###2.Feature Engineering
+
+Based on the understanding of our variables and several train and error procedure, have done the below modification to the data.
+
+1. Age:
+
+The credit score data was collected somewhere around 1980's. Assuming the minimum age of the credit card holder to be 21. I am assuming the date of the survey to be 1990. 
+
+Age <- 1990 - DOB  ( formula = 90 - dob)
+
+2. Net Family Income:
+
+It is the sum of the income of the individual and the spouse, after negating the debts , interests and montly payments.
+
+netFamIncome <- Applicant Income + Spouce Income -(outstandings)
+
+3. Net Home Value:
+
+Net Home Value is found by removing the mortage value of the home from the actual value of the home
+
+Home Value <- Value of Home - Mortgage outstanding 
+
+4. Total Number of Dependants:
+
+Both the number of children and number of other depandants are not having effect on the response on absence of other variables.
+
+Total Dependants = No. of Kids + No. of other dependants
+
+> Note
+After trying different ratio such as (income/expenditure) and (homeval/mortage) they are found to be insignificant, hence sticking to the absolute value of the variables.
+
+
+```{r transformations}
+df$Age <- 90 - df$DOB
+df$totalOut <- df$DOUTM+df$DOUTCC + df$DOUTL + df$DOUTHP
+df$netPerIncome<- df$DAINC - df$totalOut
+df$netFamIncome<- df$DAINC + df$SINC - df$totalOut
+df$homeVal <- df$DHVAL - df$DMORT 
+df$totDep <- df$NKID + df$DEP
+
+```
+
+THe Final Table will have the following variables:
+
+```{r finalTable}
+names(df)
+```
+
+Difficulties and anomaly in the dataset
+
+1. Home owners seems to be have more Bad credits
+
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+aggregate(BAD ~ RES, data=df, FUN=sum)
+```
+
+
+2. According to the formula for home value, The negative value of homeVal means
+    a) They have high mortgage on the home than its value
+    b) The details of the home are not provided(0 also means no-response)
+    c) they have not given both DHVAL and DMORT
+    
+Surprisingly there were no "00001" Zero value for any home or mortgage.
+    
+47 Home owners seems to have higher mortgate than the actual value of the home. 
+
+```{r , eval = FALSE}
+df %>%
+  filter(homeVal < 0) %>%
+  filter(BAD == 1)
+```
+
+The below 44 Owners have not provided their Homevalue and Mortgage Value.
+
+```{r, eval =FALSE}
+df %>%
+  filter(RES == "O") %>%
+  filter(DHVAL == 0)
+  
+```
+
+There are 587 people who have no ownership of home.
+of which, 14 people who are not owners, but have reported DHVAL and DMORT value.
+
+Now let's try to impute the value of the DHVAL and DMORT with the average of the non zero values of DHVAL and DMORT respectively.
+
+
+```{r meanValue}
+meanHomeValue <- mean(df$DHVAL[df$RES=="O"][df$DHVAL[df$RES=="O"] != 0])
+meanMortValue <- mean(df$DMORT[df$RES=="O"][df$DMORT[df$RES=="O"] != 0])
+
+```
+
+Also imputing the age of the unknown individuals as 39 , the average age of all the people.
+
+```{r imputation, warning=FALSE}
+df$Age[df$Age == -9] <- 39
+
+for (i in 1:1225){
+  if(df$RES == "O"){
+    if(df$DHVAL == 0){
+      df$DHVAL <- meanHomeValue
+      df$DMORT<-  meanMortValue
+      df$homeVal <- df$DHVAL - df$DMORT
+    }
+  }
+}
+
+
+```
+
+
+```{r otherValues}
+df$homeVal <- ifelse(df$homeVal < 0 , 0, df$homeVal)
+```
+
+#####Pie chart comparison for categorical variables
+
+```{r }
+df_temp <- table(df$BAD, df$NKID)
+pie(df_temp[c(1,3,5,7,9)],c(0:5),main = "NKID - Good credit")
+pie(df_temp[c(2,4,6,8,10)],c(0:5), main = "NKID - Bad credit")
+
+df_temp <- table(df$BAD, df$AES)
+pie(df_temp[c(1,3,5,7,9,11,13,15,17,19,21)],c('B','E','M','N','P','R','T','U','V' ,'W', 'Z'),main = "AES - Good credit")
+pie(df_temp[c(2,4,6,8,10,12,14,16,18,20)],c('B','E','M','N','P','R','T','U','V' ,'W', 'Z'), main = "AES - Bad credit")
+
+df_temp <- table(df$BAD, df$RES)
+pie(df_temp[c(1,3,5,7,9)],c('F','N','O' ,'P', 'U'),main = "AES - Good credit")
+pie(df_temp[c(2,4,6,8,10)],c('F','N','O' ,'P', 'U'), main = "AES - Bad credit")
+
+
+df_temp <- table(df$BAD, df$totDep)
+pie(df_temp[c(1,3,5,7,9,11)],c(0,1,2,3,4,5),main = "totDep - Good credit")
+pie(df_temp[c(2,4,6,8,10,12)],c(0,1,2,3,4,5), main = "totDep - Bad credit")
+
+
+```
+
+Some other interesting comparisions
+
+26.28 % of the Owners have bad credits
+
+24.8% of the phone holders have bad credits
+
+The 25% Phone holders who are also owners( almost all the owners except 40 people) are having bad Credits
+
+```{r }
+aggregate(BAD ~ PHON , data=df, FUN = sum)
+aggregate(BAD ~ RES , data=df, FUN=sum)
+aggregate(BAD ~ PHON + RES, data=df, FUN=sum)
+```
+
+Replacing the rest of the negative values of the net Family income with 0's. 
+
+```{r }
+df$netFamIncome <- ifelse(df$netFamIncome < 0, 0 , df$netFamIncome)
+```
+
+Choosing the Variables for my final dataset.
+
+1)Total Dependants
+
+2)Age
+
+3)Home Value
+
+4)Residential Status
+
+5)Applicant's employment status
+
+6)Phone
+
+7)Net Family Income
+
+8)Bad Credit
+
+
+```{r }
+#choosing Variables
+dfFinal <- df[c(21,16,19,20,8,6,4,15)]
+dfFinal <- data.frame(dfFinal)
+#Adding Column names
+colnames(dfFinal)<- c("totDep","Age","netFamIncome","homeVal","RES","AES","PHON","bad")
+#converting the variables to categorical
+dfFinal$totDep <- as.factor(dfFinal$totDep)
+dfFinal$PHON <- as.factor(dfFinal$PHON)
+dfFinal$bad <- as.factor(dfFinal$bad)
+#AES and #Res are already factors
+
+```
+
+Writing the file for further analysis
+
+```{r }
+#Writring the file as csv for further analysis
+write.csv(dfFinal,"dfFinal.csv",row.names = FALSE)
+```
+
+

@@ -1,0 +1,106 @@
+---
+title: "LDA Transformed SVM Model"
+author: "Karthick"
+date: "31 March 2018"
+output: html_document
+---
+
+#####1. SVM Transformations 
+
+*** Importing the dataset ***
+
+```{r }
+dfFinal <- read.csv("dfFinal.csv")
+dfFinal$totDep <- as.factor(dfFinal$totDep)
+dfFinal$PHON <- as.factor(dfFinal$PHON)
+dfFinal$bad <- as.factor(dfFinal$bad)
+
+library(caTools)
+set.seed(123)
+split = sample.split(dfFinal$bad, SplitRatio = 0.8)
+training_set = subset(dfFinal, split == TRUE)
+test_set = subset(dfFinal, split == FALSE)
+
+```
+
+*** Applying LDA Transformations ***
+
+```{r }
+# Applying LDA
+library(MASS)
+lda = lda(formula = bad ~ ., data = dfFinal)
+training_set = as.data.frame(predict(lda, training_set))
+training_set = training_set[c(4, 1)]
+test_set = as.data.frame(predict(lda, test_set))
+test_set = test_set[c(4,1)]
+lda
+plot(lda)
+```
+
+Here we are using LDA as a data extraction technique. 
+
+We are trying to get a Linear Discriminant, which helps us to project the data into a subspace that improves the class separability, but also reduces the dimensonality of the feature space.
+
+Here the eigen values form the new axes of the subspace.
+
+For K classes we have K-1 Linear Discriminants
+
+Here we have only one LDA ., which has the following form:
+
+LDA1 <- Age *2.354141e-02 - netFamIncome (4.34 X 10^5 ) - homeVal ( 4.915 X 10^ -6)...
+
+#####2. Fitting an SVM over the subspace
+
+```{r }
+# Fitting SVM to the Training set
+# install.packages('e1071')
+library(e1071)
+classifier = svm(formula = class ~ .,
+                 data = training_set,
+                 type = 'C-classification',
+                 kernel = 'linear')
+classifier
+```
+***Prediction of Tranformed Test data***
+
+```{r }
+# Predicting the Test set results
+y_pred = predict(classifier, newdata = test_set[-2])
+
+```
+
+*** Confusion Matrix *** 
+```{r }
+#confusion Matrix
+cm = table(test_set[,2],y_pred)
+cm
+```
+
+*** Visualising the subspace ***
+
+Since we have only one LDA. I have taken the same LDA to plot for both the axis to get a handle on the viualisation of the data
+
+```{r }
+# Visualising the Test set results
+library(ElemStatLearn)
+set = test_set
+X1 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.1)
+X2 = seq(min(set[, 1]) - 1, max(set[, 1]) + 1, by = 0.1)
+grid_set = expand.grid(X1, X2)
+colnames(grid_set) = c('LD1', 'LD1')
+y_grid = predict(classifier, newdata = grid_set[1])
+plot(set[, -3], main = 'SVM (Test set)',
+     xlab = 'LD1', ylab = 'LD1',
+     xlim = range(X1), ylim = range(X2))
+contour(X1, X2, matrix(as.numeric(y_grid), length(X1), length(X2)), add = TRUE)
+points(grid_set, pch = '.', col = ifelse(y_grid == 2, 'deepskyblue', ifelse(y_grid == 1, 'springgreen3', 'tomato')))
+#points(set, pch = 21, bg = ifelse(set[, 3] == 2, 'blue3', ifelse(set[, 3] == 1, 'green4', 'red3')))
+
+
+
+```
+
+>***End Note*** 
+> The LDA transformation makes the process completely not interpretable.
+> But it clearly helps the data to be projected in a different subspace., where the dataset is easily separable.
+>For prediction purpose the test data should be transformed with LDA and be compared with the predicted values.
